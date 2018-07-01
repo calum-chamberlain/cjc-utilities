@@ -5,7 +5,7 @@ Code to extract a subset of a catalog adjacent to an arbitrary cross-section.
 :date: 23/03/2018
 """
 
-from coordinates import Location, Geographic
+from cjc_utilities.coordinates.coordinates import Location, Geographic
 
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
@@ -13,14 +13,14 @@ from mpl_toolkits.mplot3d import Axes3D
 def get_plane(origin, strike, dip, length=100, height=-50):
     """
     Get four corners of a plane around an origin.
-    
+
     :type origin: Geographic
     :type strike: float
     :param strike: Strike of plane in degrees
     :type dip: float
     :param dip: Dip of plane in degrees
     :type length: float
-    :param length: 
+    :param length:
         Total length along strike, will add on the North side of the origin
     type height: float
     :param height: Total length down-dip, will be one-sided from origin.
@@ -79,6 +79,41 @@ def plot_xyz(locations, plane=None):
         ax.set_ylabel('Distance along strike (km)')
         ax.set_zlabel('Distance down-dip (km) -ve down')
     return fig
+
+
+def plot_xy(locations):
+    """
+    Plot 2D scatter plot coloured by depth.
+    """
+    x, y, z, s = ([0] * len(locations), [0] * len(locations),
+                  [0] * len(locations), [1] * len(locations))
+    for i, location in enumerate(locations):
+        if isinstance(location, Geographic):
+            x[i] = location.longitude
+            y[i] = location.latitude
+            z[i] = location.depth
+            if location.magnitude is not None:
+                s[i] = location.magnitude
+        elif isinstance(location, Location):
+            x[i] = location.x
+            y[i] = location.y
+            z[i] = location.z
+            if location.magnitude is not None:
+                s[i] = location.magnitude
+        else:
+            raise TypeError("Location is neither Geographic nor Location")
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.scatter(x, y, s=s, c=z)
+    if isinstance(locations[0], Geographic):
+        ax.set_xlabel("Longitude (deg)")
+        ax.set_ylabel("Latitude (deg)")
+    else:
+        ax.set_xlabel('Distance normal to plane (km)')
+        ax.set_ylabel('Distance along strike (km)')
+
+    return fig
+
 
 if __name__ == '__main__':
     locations = []
