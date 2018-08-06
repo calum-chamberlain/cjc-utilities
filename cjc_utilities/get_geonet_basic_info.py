@@ -6,17 +6,19 @@ import urllib.request
 import csv
 import logging
 from datetime import timedelta
+from datetime import datetime as dt
 
 logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s")
 Logger = logging.getLogger("GeoNet-downloader")
 
-BASE_URL = ("https://quakesearch.geonet.org.nz/csv?bbox=163.95996,"
-            "-49.18170,182.63672,-32.28713&startdate={0}&enddate={1}")
+BASE_URL = ("https://quakesearch.geonet.org.nz/csv?bbox={0},{1},{2},{3}"
+            "&startdate={4}&enddate={5}")
 
 
-def get_geonet_events(startdate, enddate, max_chunk=365, write_out=True):
+def get_geonet_events(startdate, enddate, bbox=(163.96, -49.18, 182.6, -32.3),
+                      max_chunk=365, write_out=False):
     if enddate - startdate > timedelta(days=max_chunk):
         Logger.info("Requested window too large, will download in chunks")
         chunks = []
@@ -34,30 +36,33 @@ def get_geonet_events(startdate, enddate, max_chunk=365, write_out=True):
         Logger.info(
             "Downloading between {0} and {1}".format(chunk[0], chunk[1]))
         response = urllib.request.urlopen(
-            BASE_URL.format(chunk[0].strftime("%Y-%m-%d"),
+            BASE_URL.format(bbox[0], bbox[1], bbox[2], bbox[3],
+                            chunk[0].strftime("%Y-%m-%d"),
                             chunk[1].strftime("%Y-%m-%d")))
-        Logger.debug(BASE_URL.format(chunk[0].strftime("%Y-%m-%d"),
+        Logger.debug(BASE_URL.format(bbox[0], bbox[1], bbox[2], bbox[3],
+                                     chunk[0].strftime("%Y-%m-%d"),
                                      chunk[1].strftime("%Y-%m-%d")))
         reader = csv.DictReader(response.read().decode('utf-8').splitlines())
         reader = [line for line in reader]
         for line in reader:
             event_info.append(
                 (float(line[' latitude']), float(line['longitude']),
-                 float(line[' depth']), float(line[' magnitude'])))
+                 float(line[' depth']), float(line[' magnitude']),
+                 dt.strptime(line['origintime'], "%Y-%m-%dT%H:%M:%S.%fZ")))
     if write_out:
         outfile = "get_geonet_events_{0}-{1}.csv".format(
            startdate.strftime("%Y%m%d"), enddate.strftime("%Y%m%d"))
         with open(outfile, "w") as f:
             for event in event_info:
-                f.write("{0:.2f}, {1:.2f}, {2:.2f}, {3:.2f}\n".format(
-                    event[0], event[1], event[2], event[3]))
+                f.write("{0:.2f}, {1:.2f}, {2:.2f}, {3:.2f}, {4}\n".format(
+                    event[0], event[1], event[2], event[3],
+                    event[4].strftime("%Y-%m-%dT%H:%M:%S.%f")))
     else:
         return event_info
 
 
 if __name__ == "__main__":
     import argparse
-    from datetime import datetime as dt
 
     parser = argparse.ArgumentParser(
         description='Download lat, lon, depth, mag from GeoNet')
@@ -69,4 +74,5 @@ if __name__ == "__main__":
             help='Enddate as %Y/%m/%d', required=True)
     args = vars(parser.parse_args())
     get_geonet_events(startdate=dt.strptime(args['startdate'], "%Y/%m/%d"),
-                      enddate=dt.strptime(args['enddate'], "%Y/%m/%d"))
+                      enddate=dt.strptime(args['enddate'], "%Y/%m/%d"),
+                      write_out=True)
