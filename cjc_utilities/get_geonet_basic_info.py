@@ -46,17 +46,24 @@ def get_geonet_events(startdate, enddate, bbox=(163.96, -49.18, 182.6, -32.3),
         reader = [line for line in reader]
         for line in reader:
             event_info.append(
-                (float(line[' latitude']), float(line['longitude']),
-                 float(line[' depth']), float(line[' magnitude']),
-                 dt.strptime(line['origintime'], "%Y-%m-%dT%H:%M:%S.%fZ")))
+                {"latitude": float(line[' latitude']),
+                 "longitude": float(line['longitude']),
+                 "depth": float(line[' depth']),
+                 "magnitude": float(line[' magnitude']),
+                 "origin-time": dt.strptime(line['origintime'],
+                                            "%Y-%m-%dT%H:%M:%S.%fZ"),
+                 "id": line['publicid']})
     if write_out:
         outfile = "get_geonet_events_{0}-{1}.csv".format(
            startdate.strftime("%Y%m%d"), enddate.strftime("%Y%m%d"))
         with open(outfile, "w") as f:
+            f.write("PublicID, Latitude (deg), Longitude (deg), Depth (km),"
+                    " Magnitude, Origin-time (UTC)\n")
             for event in event_info:
                 f.write("{0:.2f}, {1:.2f}, {2:.2f}, {3:.2f}, {4}\n".format(
-                    event[0], event[1], event[2], event[3],
-                    event[4].strftime("%Y-%m-%dT%H:%M:%S.%f")))
+                    event['id'], event['latitude'], event['longitude'],
+                    event['depth'], event['magnitude'], 
+                    event['origin-time'].strftime("%Y-%m-%dT%H:%M:%S.%f")))
     else:
         return event_info
 
