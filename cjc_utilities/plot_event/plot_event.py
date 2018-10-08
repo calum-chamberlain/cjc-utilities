@@ -4,8 +4,10 @@ Functions for plotting events.
 Calum Chamberlain
 """
 
+import numpy as np
+
 def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
-                           all_channels=False, filt=None):
+                           all_channels=False, filt=None, ignore_rotated=True):
     """
     Plot the waveforms for an event with pick and calculated arrival times.
 
@@ -17,6 +19,9 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
     :type all_channels: bool
     :param all_channels: Whether to download all channels from that sensor.
     """
+    from obspy import Stream
+    from obspy.clients.fdsn.client import FDSNNoDataException
+
     try:
         origin_time = event.preferred_origin().time or event.origins[0].time
     except AttributeError:
@@ -34,9 +39,23 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
                      pick.waveform_id.station_code or "*",
                      pick.waveform_id.location_code or "*", channel,
                      t1, t2)
+        if ignore_rotated and channel[-1] in ["R", "T"]:
+            continue
         if chan_info not in bulk:
             bulk.append(chan_info)
-    st = client.get_waveforms_bulk(bulk)
+    try:
+        st = client.get_waveforms_bulk(bulk)
+    except FDSNNoDataException as e:
+        print("No data exception - trying individual channels")
+        st = Stream()
+        for chan_info in bulk:
+            try:
+                st += client.get_waveforms(
+                    network=chan_info[0], station=chan_info[1],
+                    location=chan_info[2], channel=chan_info[3],
+                    starttime=chan_info[4], endtime=chan_info[5])
+            except FDSNNoDataException:
+                print("No data for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
     if filt:
         st.detrend().filter('bandpass', freqmin=filt[0], freqmax=filt[1])
     return plot_event(event, st, length=length, size=size)
