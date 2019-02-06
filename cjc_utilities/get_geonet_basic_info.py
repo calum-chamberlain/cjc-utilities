@@ -8,9 +8,6 @@ import logging
 from datetime import timedelta
 from datetime import datetime as dt
 
-logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s")
 Logger = logging.getLogger("GeoNet-downloader")
 
 BASE_URL = ("https://quakesearch.geonet.org.nz/csv?bbox={0},{1},{2},{3}"
