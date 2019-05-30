@@ -7,13 +7,18 @@ Animator for obspy catalogs
 """
 
 from obspy.imaging.cm import obspy_sequential
-from obspy import Catalog
+from obspy import Catalog, UTCDateTime
 import numpy as np
 from future.utils import native_str
 import datetime
 import warnings
 from matplotlib.dates import AutoDateFormatter, AutoDateLocator, date2num
 import cartopy.crs as ccrs
+try:
+    from progressbar import ProgressBar
+    HAS_PROGRESS = True
+except:
+    HAS_PROGRESS = False
 
 
 def _get_plot_coords(catalog):
@@ -350,8 +355,8 @@ class AnimatedCatalog(Catalog):
 
     def animate(self, projection='global', resolution='l',
                 continent_fill_color='0.9', water_fill_color='1.0',
-                colormap=None, show=True, outfile=None, title=None,
-                time_step=86400, decay=10, interval=10, **kwargs):
+                colormap=None, show=True, title=None, time_step=86400,
+                decay=10, interval=10, **kwargs):
         """
         Animate the catalog in time.
 
@@ -424,6 +429,8 @@ class AnimatedCatalog(Catalog):
             horizontalalignment="left", verticalalignment="bottom",
             transform=map_ax.transAxes)
 
+        if HAS_PROGRESS:
+            bar = ProgressBar(max_value=frames)
         """ ####################### Animation function #####################"""
         def update(frame):
             if len(sub_catalogs) > 0:
@@ -442,6 +449,7 @@ class AnimatedCatalog(Catalog):
                     cmap=colormap, transform=ccrs.Geodetic(), alpha=alphas[i])
             frame_time = catalog_start + (frame * interval)
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
+            bar.update(frame)
             return scatters, timestamp
 
         anim = FuncAnimation(
@@ -449,14 +457,11 @@ class AnimatedCatalog(Catalog):
 
         if show:
             plt.show()
-        if outfile is not None:
-            fig.savefig(outfile)
         return fig
 
 
 if __name__ == '__main__':
     from obspy.clients.fdsn import Client
-    from obspy import UTCDateTime
 
     client = Client("GEONET")
     cat = client.get_events(
