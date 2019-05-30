@@ -1,96 +1,171 @@
-from obspy.imaging.maps import *
-from obspy.imaging.maps import _plot_basemap_into_axes
+"""
+Animator for obspy catalogs
+
+:author: Calum J Chamberlain
+:date: 30/5/2019
+:licence: LGPL v3
+"""
+
 from obspy.imaging.cm import obspy_sequential
-from obspy import UTCDateTime
+from obspy import Catalog
 import numpy as np
+from future.utils import native_str
 import datetime
+import warnings
 from matplotlib.dates import AutoDateFormatter, AutoDateLocator, date2num
+import cartopy.crs as ccrs
 
 
-def test_animated_plot(lons, lats, times, size, color, step, decay, projection,
-                       resolution, continent_fill_color, water_fill_color,
-                       colormap=None, colorbar=None,
-                       colorbar_ticklabel_format=None, marker="o", title=None,
-                       interval=200, show=True, **kwargs):
+def _get_plot_coords(catalog):
+    lats, lons, mags, colors = ([], [], [], [])
+    for event in catalog:
+        if not event.origins:
+            msg = ("Event '%s' does not have an origin and will not be "
+                   "plotted." % str(event.resource_id))
+            warnings.warn(msg)
+            continue
+        origin = event.preferred_origin() or event.origins[0]
+        lats.append(origin.latitude)
+        lons.append(origin.longitude)
+        try:
+            magnitude = event.preferred_magnitude() or event.magnitudes[0]
+            mag = magnitude.mag
+        except (IndexError, AttributeError):
+            mag = 1
+        mags.append(mag)
+        colors.append((origin.get('depth') or np.nan) / 1e3)
+    return lats, lons, mags, colors
+
+
+def _get_event_time(event):
     """
-    Make an animated plot of locations and associated times.
+    Get the time of an event - origin preferred, then pick.
+
+    :type event: `obspy.core.event.Event`
+    :return: UTCDateTime
+    """
+    try:
+        origin = event.preferred_origin() or event.origins[0]
+        t = origin.time
+    except (IndexError, AttributeError):
+        warnings.warn(
+            "No origin time for event, defaulting to pick time")
+        try:
+            t = min([pick.time for pick in event.picks])
+        except ValueError:
+            raise AttributeError("No time for event")
+    return t
+
+
+def _blank_map(lons, lats, color, projection="global",
+               resolution='110m', continent_fill_color='0.8',
+               water_fill_color='1.0', colormap=None, colorbar=None,
+               title=None, colorbar_ticklabel_format=None,
+               color_label="Depth (km)", proj_kwargs=None):
+    """
+    Plot a map for the region appropriate for the catalog, but do not plot the
+    events themselves.
+
+    Used to set-up a figure before animation.
 
     :type lons: list/tuple of floats
     :param lons: Longitudes of the data points.
     :type lats: list/tuple of floats
     :param lats: Latitudes of the data points.
-    :type times: list/tuple of UTCDateTime
-    :param times: Origin times of data points.
-    :type size: float or list/tuple of floats
-    :param size: Size of the individual points in the scatter plot.
-    :type colors: list/tuple of floats (or objects that can be
+    :type color: list/tuple of floats (or objects that can be
         converted to floats, like e.g.
         :class:`~obspy.core.utcdatetime.UTCDateTime`)
-    :param colors: Color information of the individual data points to be
+    :param color: Color information of the individual data points to be
         used in the specified color map (e.g. origin depths,
         origin times).
-    :type labels: list/tuple of str
-    :param labels: Annotations for the individual data points.
-    :type step: int
-    :param step: Time in seconds for grouping and plotting earthquakes,
-        will plot all earthquakes within this step size together.  This is
-        also the frame-rate, e.g. one frame per step.
-    :type decay: int
-    :param decay: Time in seconds to leave locations plotted.  Plotted
-            locations will fade (reduce opacity) linearly through the decay.
-    :type projection: str
+    :type projection: str, optional
     :param projection: The map projection.
         Currently supported are:
 
-            * ``"global"`` (Will plot the whole world.)
-            * ``"ortho"`` (Will center around the mean lat/long.)
-            * ``"local"`` (Will plot around local events)
-    :type resolution: str
+            * ``"global"`` (Will plot the whole world using
+              :class:`~cartopy.crs.Mollweide`.)
+            * ``"ortho"`` (Will center around the mean lat/long using
+              :class:`~cartopy.crs.Orthographic`.)
+            * ``"local"`` (Will plot around local events using
+              :class:`~cartopy.crs.AlbersEqualArea`.)
+            * Any other Cartopy :class:`~cartopy.crs.Projection`. An instance
+              of this class will be created using the supplied ``proj_kwargs``.
+
+        Defaults to "global"
+    :type resolution: str, optional
     :param resolution: Resolution of the boundary database to use. Will be
-        based directly to the basemap module. Possible values are:
+        passed directly to the Cartopy module. Possible values are:
 
-            * ``"c"`` (crude)
-            * ``"l"`` (low)
-            * ``"i"`` (intermediate)
-            * ``"h"`` (high)
-            * ``"f"`` (full)
+            * ``"110m"``
+            * ``"50m"``
+            * ``"10m"``
 
-    :type continent_fill_color: Valid matplotlib color
-    :param continent_fill_color:  Color of the continents.
-    :type water_fill_color: Valid matplotlib color
+        Defaults to ``"110m"``. For compatibility, you may also specify any of
+        the Basemap resolutions defined in :func:`plot_basemap`.
+    :type continent_fill_color: Valid matplotlib color, optional
+    :param continent_fill_color:  Color of the continents. Defaults to
+        ``"0.9"`` which is a light gray.
+    :type water_fill_color: Valid matplotlib color, optional
     :param water_fill_color: Color of all water bodies.
-    :type colormap: str, any matplotlib colormap
+        Defaults to ``"white"``.
+    :type colormap: str, any matplotlib colormap, optional
     :param colormap: The colormap for color-coding the events as provided
         in `color` kwarg.
         The event with the smallest `color` property will have the
         color of one end of the colormap and the event with the highest
         `color` property the color of the other end with all other events
         in between.
-    :type marker: str
-    :param marker: Any valid matplotlib marker style descriptor.
+        Defaults to None which will use the default matplotlib colormap.
+    :type colorbar: bool, optional
+    :param colorbar: When left `None`, a colorbar is plotted if more than one
+        object is plotted. Using `True`/`False` the colorbar can be forced
+        on/off.
     :type title: str
     :param title: Title above plot.
-    :type interval: int
-    :param interval: Interval between frames in ms.
+    :type colorbar_ticklabel_format: str or function or
+        subclass of :class:`matplotlib.ticker.Formatter`
+    :param colorbar_ticklabel_format: Format string or Formatter used to format
+        colorbar tick labels.
     :type show: bool
     :param show: Whether to show the figure after plotting or not. Can be used
         to do further customization of the plot before showing it.
+    :type proj_kwargs: dict
+    :param proj_kwargs: Keyword arguments to pass to the Cartopy
+        :class:`~cartopy.ccrs.Projection`. In this dictionary, you may specify
+        ``central_longitude='auto'`` or ``central_latitude='auto'`` to have
+        this function calculate the latitude or longitude as it would for other
+        projections. Some arguments may be ignored if you choose one of the
+        built-in ``projection`` choices.
+    :return: Figure
     """
-    import matplotlib.animation as animation
+    from obspy.imaging.maps import (
+        _CARTOPY_FEATURES, _CARTOPY_RESOLUTIONS, mean_longitude)
+    import cartopy.feature as cfeature
     import matplotlib.pyplot as plt
-    if not HAS_BASEMAP:
-        raise ImportError('Basemap cannot be imported but was implicitly '
-                          'requested.')
-    if any([isinstance(c, (datetime.datetime, UTCDateTime)) for c in color]):
+    from matplotlib.colorbar import ColorbarBase
+    from matplotlib.colors import Normalize
+    from matplotlib.ticker import (
+        FormatStrFormatter, Formatter, FuncFormatter, MaxNLocator)
+
+    if isinstance(color[0], (datetime.datetime, UTCDateTime)):
         datetimeplot = True
-        color = [
-            (np.isfinite(float(t)) and
-             date2num(getattr(t, 'datetime', t)) or
-             np.nan)
-            for t in color]
+        color = [date2num(getattr(t, 'datetime', t)) for t in color]
     else:
         datetimeplot = False
+
     fig = plt.figure()
+
+    # The colorbar should only be plotted if more then one event is
+    # present.
+    if colorbar is not None:
+        show_colorbar = colorbar
+    else:
+        if len(lons) > 1 and hasattr(color, "__len__") and \
+                not isinstance(color, (str, native_str)):
+            show_colorbar = True
+        else:
+            show_colorbar = False
+
     if projection == "local":
         ax_x0, ax_width = 0.10, 0.80
     elif projection == "global":
@@ -98,55 +173,135 @@ def test_animated_plot(lons, lats, times, size, color, step, decay, projection,
     else:
         ax_x0, ax_width = 0.05, 0.90
 
-    if colorbar:
-        map_ax = fig.add_axes([ax_x0, 0.13, ax_width, 0.77])
+    proj_kwargs = proj_kwargs or {}
+    if projection == 'global':
+        proj_kwargs['central_longitude'] = np.mean(lons)
+        proj = ccrs.Mollweide(**proj_kwargs)
+    elif projection == 'ortho':
+        proj_kwargs['central_latitude'] = np.mean(lats)
+        proj_kwargs['central_longitude'] = mean_longitude(lons)
+        proj = ccrs.Orthographic(**proj_kwargs)
+    elif projection == 'local':
+        if min(lons) < -150 and max(lons) > 150:
+            max_lons = max(np.array(lons) % 360)
+            min_lons = min(np.array(lons) % 360)
+        else:
+            max_lons = max(lons)
+            min_lons = min(lons)
+        lat_0 = max(lats) / 2. + min(lats) / 2.
+        lon_0 = max_lons / 2. + min_lons / 2.
+        if lon_0 > 180:
+            lon_0 -= 360
+        deg2m_lat = 2 * np.pi * 6371 * 1000 / 360
+        deg2m_lon = deg2m_lat * np.cos(lat_0 / 180 * np.pi)
+        if len(lats) > 1:
+            height = (max(lats) - min(lats)) * deg2m_lat
+            width = (max_lons - min_lons) * deg2m_lon
+            margin = 0.2 * (width + height)
+            height += margin
+            width += margin
+        else:
+            height = 2.0 * deg2m_lat
+            width = 5.0 * deg2m_lon
+        # Do intelligent aspect calculation for local projection
+        # adjust to figure dimensions
+        w, h = fig.get_size_inches()
+        aspect = w / h
+        if show_colorbar:
+            aspect *= 1.2
+        if width / height < aspect:
+            width = height * aspect
+        else:
+            height = width / aspect
+
+        proj_kwargs['central_latitude'] = lat_0
+        proj_kwargs['central_longitude'] = lon_0
+        proj_kwargs['standard_parallels'] = [lat_0, lat_0]
+        proj = ccrs.AlbersEqualArea(**proj_kwargs)
+
+    # User-supplied projection.
+    elif isinstance(projection, type):
+        if 'central_longitude' in proj_kwargs:
+            if proj_kwargs['central_longitude'] == 'auto':
+                proj_kwargs['central_longitude'] = mean_longitude(lons)
+        if 'central_latitude' in proj_kwargs:
+            if proj_kwargs['central_latitude'] == 'auto':
+                proj_kwargs['central_latitude'] = np.mean(lats)
+        if 'pole_longitude' in proj_kwargs:
+            if proj_kwargs['pole_longitude'] == 'auto':
+                proj_kwargs['pole_longitude'] = np.mean(lons)
+        if 'pole_latitude' in proj_kwargs:
+            if proj_kwargs['pole_latitude'] == 'auto':
+                proj_kwargs['pole_latitude'] = np.mean(lats)
+
+        proj = projection(**proj_kwargs)
+
+    else:
+        msg = "Projection '%s' not supported." % projection
+        raise ValueError(msg)
+
+    if show_colorbar:
+        map_ax = fig.add_axes([ax_x0, 0.13, ax_width, 0.77], projection=proj)
         cm_ax = fig.add_axes([ax_x0, 0.05, ax_width, 0.05])
+        plt.sca(map_ax)
     else:
         ax_y0, ax_height = 0.05, 0.85
         if projection == "local":
             ax_y0 += 0.05
             ax_height -= 0.05
-        map_ax = fig.add_axes([ax_x0, ax_y0, ax_width, ax_height])
+        map_ax = fig.add_axes([ax_x0, ax_y0, ax_width, ax_height],
+                              projection=proj)
 
-    bmap = _plot_basemap_into_axes(ax=map_ax, lons=lons, lats=lats, size=size,
-                                   color=color, projection=projection,
-                                   resolution=resolution,
-                                   continent_fill_color=continent_fill_color,
-                                   water_fill_color=water_fill_color,
-                                   title=title, animate=True)
-    groups = []
-    min_time = min(times)
-    n_groups = int(((max(times) - min(times)) / step) + (decay / step))
-    alphas = np.linspace(1, 0, n_groups)
-    min_color = min(color)
-    max_color = max(color)
+    if projection == 'local':
+        x0, y0 = proj.transform_point(lon_0, lat_0, proj.as_geodetic())
+        map_ax.set_xlim(x0 - width / 2, x0 + width / 2)
+        map_ax.set_ylim(y0 - height / 2, y0 + height / 2)
+    else:
+        map_ax.set_global()
 
-    scal_map = ScalarMappable(norm=Normalize(min_color, max_color),
-                              cmap=colormap)
-    ev_info = [[lat, lon, c, s, t]
-               for lat, lon, c, s, t in zip(lats, lons, color, size, times)]
-    ev_info.sort(key=lambda tup: tup[-1])
-    for i in range(n_groups):
-        group = []
-        for ev in ev_info:
-            for j, alpha in enumerate(alphas):
-                if (i + j) * step < ev[4] - min_time < (i + j + 1) * step:
-                    ev.append(alpha)
-                    group.append(list(ev))
-                else:
-                    continue
-        groups.append(group)
-    groups.insert(0, [])
-    x = [g[1] for g in groups[0]]
-    y = [g[0] for g in groups[0]]
-    s = [g[3] for g in groups[0]]
-    c = [g[2] for g in groups[0]]
-    a = [g[5] for g in groups[0]]
-    x, y = bmap(x, y)
-    points = bmap.scatter(x, y, s=s, lw=0.5, marker=marker, c=c,
-                          alpha=a[0], cmap=colormap, zorder=10)
-    print(points)
-    if colorbar:
+    # Pick features at specified resolution.
+    resolution = _CARTOPY_RESOLUTIONS[resolution]
+    try:
+        borders, land, ocean = _CARTOPY_FEATURES[resolution]
+    except KeyError:
+        borders = cfeature.NaturalEarthFeature(cfeature.BORDERS.category,
+                                               cfeature.BORDERS.name,
+                                               resolution,
+                                               edgecolor='none',
+                                               facecolor='none')
+        land = cfeature.NaturalEarthFeature(cfeature.LAND.category,
+                                            cfeature.LAND.name, resolution,
+                                            edgecolor='face', facecolor='none')
+        ocean = cfeature.NaturalEarthFeature(cfeature.OCEAN.category,
+                                             cfeature.OCEAN.name, resolution,
+                                             edgecolor='face',
+                                             facecolor='none')
+        _CARTOPY_FEATURES[resolution] = (borders, land, ocean)
+
+    # Draw coast lines, country boundaries, fill continents.
+    map_ax.set_facecolor(water_fill_color)
+    map_ax.add_feature(ocean, facecolor=water_fill_color)
+    map_ax.add_feature(land, facecolor=continent_fill_color)
+    map_ax.add_feature(borders, edgecolor='0.75')
+    map_ax.coastlines(resolution=resolution, color='0.4')
+
+    # Draw grid lines - TODO: draw_labels=True doesn't work yet.
+    if projection == 'local':
+        map_ax.gridlines()
+    else:
+        # Draw lat/lon grid lines every 30 degrees.
+        map_ax.gridlines(xlocs=range(-180, 181, 30), ylocs=range(-90, 91, 30))
+
+    # scatter = map_ax.scatter(lons, lats, marker=marker, s=size, c=color,
+    #                          zorder=10, cmap=colormap,
+    #                          transform=ccrs.Geodetic())
+    norm = Normalize(vmin=min(color), vmax=max(color))
+
+    if title:
+        plt.suptitle(title)
+
+    # Only show the colorbar for more than one event.
+    if show_colorbar:
         if colorbar_ticklabel_format is not None:
             if isinstance(colorbar_ticklabel_format, (str, native_str)):
                 formatter = FormatStrFormatter(colorbar_ticklabel_format)
@@ -165,80 +320,149 @@ def test_animated_plot(lons, lats, times, size, color, step, decay, projection,
             else:
                 locator = None
                 formatter = None
+        cb = ColorbarBase(
+            cm_ax, norm=norm, cmap=colormap, orientation='horizontal',
+            ticks=locator, format=formatter)
+        cb.set_label(color_label)
+        # Compat with old matplotlib versions.
+        if hasattr(cb, "update_ticks"):
+            cb.update_ticks()
 
-        # normal case: axes for colorbar was set up in this routine
-        if "cm_ax" in locals():
-            cb_kwargs = {"cax": cm_ax}
-        # unusual case: reusing a plot that has no colorbar set up previously
-        else:
-            cb_kwargs = {"ax": map_ax}
-        cb = fig.colorbar(
-            mappable=points, cmap=colormap, orientation='horizontal',
-            ticks=locator, format=formatter, **cb_kwargs)
+    return fig, map_ax
 
-    def animate(_i):
-        xy = [bmap(g[1], g[0]) for g in groups[_i]]
-        s = [g[3] for g in groups[_i]]
-        c = scal_map.to_rgba([g[2] for g in groups[_i]])
-        a = [g[5] for g in groups[_i]]
-        if len(a) == 0:
-            a = 0
-        else:
-            a = a[0]
-        points.set_facecolors(c)
-        points.set_sizes(s)
-        points.set_offsets(xy)
-        points.set_alpha(a)
-        return points
 
-    anim = animation.FuncAnimation(plt.gcf(), animate, frames=n_groups,
-                                   interval=interval)
+class AnimatedCatalog(Catalog):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    if show:
-        plt.show()
-    else:
-        return anim
+    def time_sort(self, *args, **kwargs):
+        """
+        Sort the catalog by time - origin-time preferred, but if not found,
+        pick time will be used
+        """
+        _times = []
+        for event in self.events:
+            t = _get_event_time(event=event)
+            _times.append((t, event))
+        _times.sort(key=lambda _t: _t[0], *args, **kwargs)
+        _, self.events = zip(*_times)
+        return self
+
+    def animate(self, projection='global', resolution='l',
+                continent_fill_color='0.9', water_fill_color='1.0',
+                colormap=None, show=True, outfile=None, title=None,
+                time_step=86400, decay=10, interval=10, **kwargs):
+        """
+        Animate the catalog in time.
+
+        :type time_step: float
+        :param time_step: Frame size in seconds.
+        :type decay: int
+        :param decay:
+            How long to keep old events on the plot in frames - will fade out
+            (decrease alpha) linearly through this period.
+        :type interval: int
+        :param interval: Time between frames (ms)
+
+        :return:
+        """
+        import matplotlib.pyplot as plt
+        from matplotlib.animation import FuncAnimation
+        from collections import deque
+
+        """################## Set up catalog chunks #######################"""
+        self.time_sort()
+        sub_catalogs, chunk_ends = ([], [])
+        catalog_start = _get_event_time(event=self.events[0])
+        catalog_end = _get_event_time(event=self.events[-1])
+        chunk_start = catalog_start
+        while chunk_start < catalog_end:
+            chunk_end = chunk_start + time_step
+            sub_catalog = Catalog([
+                e for e in self.events
+                if chunk_start <= _get_event_time(e) < chunk_end])
+            sub_catalogs.append(sub_catalog)
+            chunk_ends.append(chunk_end)
+            chunk_start += time_step
+        catalog_deck = deque([Catalog() for _ in range(decay)], maxlen=decay)
+        alphas = np.linspace(0., 1., decay)
+
+        frames = int(round(
+            ((catalog_end - catalog_start) / time_step) + 2 * decay, 0))
+
+        """#################### Set up the empty figure ####################"""
+        # lat/lon coordinates, magnitudes, dates
+        lats, lons, mags, colors = _get_plot_coords(self)
+
+        # Create the colormap for date based plotting.
+        if colormap is None:
+            colormap = obspy_sequential
+
+        if title is None:
+            title = "Animated Catalog"
+
+        min_size = 2
+        max_size = 30
+        min_size_ = min(mags) - 1
+        max_size_ = max(mags) + 1
+
+        fig, map_ax = _blank_map(
+            lons, lats, colors, projection=projection, resolution=resolution,
+            continent_fill_color=continent_fill_color,
+            water_fill_color=water_fill_color, colormap=colormap, title=title,
+            color_label="Depth (km)")
+
+        """ ############# Set up the initial scatters ##################### """
+        scatters = []
+        for _, alpha in zip(catalog_deck, alphas):
+            scatters.append(map_ax.scatter(
+                [], [], marker="o", s=[], c=[], zorder=10, cmap=colormap,
+                transform=ccrs.Geodetic(), alpha=alpha))
+        frame_time = catalog_start - interval
+        timestamp = map_ax.text(
+            0.05, 0.05, frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"),
+            horizontalalignment="left", verticalalignment="bottom",
+            transform=map_ax.transAxes)
+
+        """ ####################### Animation function #####################"""
+        def update(frame):
+            if len(sub_catalogs) > 0:
+                catalog_deck.append(sub_catalogs.pop(0))
+            else:
+                catalog_deck.append(Catalog())
+
+            for i, cat in enumerate(catalog_deck):
+                lats, lons, mags, colors = _get_plot_coords(cat)
+                frac = [(0.2 + (_i - min_size_)) / (max_size_ - min_size_)
+                        for _i in mags]
+                size_plot = [(_i * (max_size - min_size)) ** 2 for _i in frac]
+                scatters[i].remove()
+                scatters[i] = map_ax.scatter(
+                    lons, lats, marker="o", s=size_plot, c=colors, zorder=10,
+                    cmap=colormap, transform=ccrs.Geodetic(), alpha=alphas[i])
+            frame_time = catalog_start + (frame * interval)
+            timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
+            return scatters, timestamp
+
+        anim = FuncAnimation(
+            fig, update, frames=frames, interval=interval, repeat=False)
+
+        if show:
+            plt.show()
+        if outfile is not None:
+            fig.savefig(outfile)
+        return fig
 
 
 if __name__ == '__main__':
-    lons = [173.8327766, 174.3092149, 173.4703075, 172.914321, 173.6952679,
-            173.7258489, 173.8848195, 174.0049249, 174.2375215, 173.8310381,
-            173.2884741, 173.4638208, 174.2928826, 174.2526478, 173.5961806,
-            173.9787327, 173.8085293, 173.5475915, 174.0427485, 174.3182552]
-    lats = [-42.38910312, -41.83240977, -42.39025399, -42.64619075,
-            -42.07473242, -42.2358171, -42.29550808, -42.32569712, -41.6901737,
-            -42.24054879, -42.47008968, -42.39173439, -41.69179934,
-            -41.71313951, -42.46233008, -42.0095946, -42.26492239,
-            -42.53100965, -41.87465439, -41.72924518]
-    times = [UTCDateTime('2016-11-14T23:52:25.306668Z'),
-             UTCDateTime('2016-11-14T23:47:19.725126Z'),
-             UTCDateTime('2016-11-14T23:45:57.964739Z'),
-             UTCDateTime('2016-11-14T23:44:52.573135Z'),
-             UTCDateTime('2016-11-14T23:41:54.645464Z'),
-             UTCDateTime('2016-11-14T23:37:51.389411Z'),
-             UTCDateTime('2016-11-14T23:36:48.798458Z'),
-             UTCDateTime('2016-11-14T23:36:01.110241Z'),
-             UTCDateTime('2016-11-14T23:33:20.548524Z'),
-             UTCDateTime('2016-11-14T23:31:01.385975Z'),
-             UTCDateTime('2016-11-14T23:30:29.523533Z'),
-             UTCDateTime('2016-11-14T23:29:01.861621Z'),
-             UTCDateTime('2016-11-14T23:25:39.571550Z'),
-             UTCDateTime('2016-11-14T23:20:17.766446Z'),
-             UTCDateTime('2016-11-14T23:17:43.296723Z'),
-             UTCDateTime('2016-11-14T23:13:40.581251Z'),
-             UTCDateTime('2016-11-14T23:11:17.491870Z'),
-             UTCDateTime('2016-11-14T23:09:36.462545Z'),
-             UTCDateTime('2016-11-14T23:07:29.087792Z'),
-             UTCDateTime('2016-11-14T23:04:11.732366Z')]
-    colors = [35.46875, 16.71875, 19.0625, 18.59375, 22.34375, 27.03125,
-              22.8125, 19.0625, 14.84375, 30.3125, 22.34375, 5.46875,
-              5.46875, 15.546875, 15.78125, 24.21875, 25.15625, 7.34375,
-              28.90625, 17.65625]
-    fig = test_animated_plot(lons=lons, lats=lats, times=times,
-                             size=np.arange(200, 220), color=colors, step=600,
-                             decay=1200, projection='local', resolution='h',
-                             continent_fill_color='0.9',
-                             water_fill_color='1.0',
-                             colormap=obspy_sequential, colorbar=True,
-                             marker="o", title='test animation',
-                             interval=200, show=True)
+    from obspy.clients.fdsn import Client
+    from obspy import UTCDateTime
+
+    client = Client("GEONET")
+    cat = client.get_events(
+        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 1, 2))
+    ani_cat = AnimatedCatalog(cat)
+    fig = ani_cat.animate(
+        projection="local", title="test_catalog", show=True, time_step=600,
+        decay=10)
+
