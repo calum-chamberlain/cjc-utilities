@@ -66,7 +66,8 @@ def _blank_map(lons, lats, color, projection="global",
                resolution='110m', continent_fill_color='0.8',
                water_fill_color='1.0', colormap=None, colorbar=None,
                title=None, colorbar_ticklabel_format=None,
-               color_label="Depth (km)", proj_kwargs=None):
+               color_label="Depth (km)", proj_kwargs=None,
+               figsize=(20, 20), pad=0.05):
     """
     Plot a map for the region appropriate for the catalog, but do not plot the
     events themselves.
@@ -158,7 +159,7 @@ def _blank_map(lons, lats, color, projection="global",
     else:
         datetimeplot = False
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=figsize)
 
     # The colorbar should only be plotted if more then one event is
     # present.
@@ -202,7 +203,7 @@ def _blank_map(lons, lats, color, projection="global",
         if len(lats) > 1:
             height = (max(lats) - min(lats)) * deg2m_lat
             width = (max_lons - min_lons) * deg2m_lon
-            margin = 0.2 * (width + height)
+            margin = pad * (width + height)
             height += margin
             width += margin
         else:
@@ -356,7 +357,7 @@ class AnimatedCatalog(Catalog):
     def animate(self, projection='global', resolution='l',
                 continent_fill_color='0.9', water_fill_color='1.0',
                 colormap=None, show=True, title=None, time_step=86400,
-                decay=10, interval=10, **kwargs):
+                decay=10, interval=10, figsize=(20, 20), **kwargs):
         """
         Animate the catalog in time.
 
@@ -406,7 +407,7 @@ class AnimatedCatalog(Catalog):
         if title is None:
             title = "Animated Catalog"
 
-        min_size = 2
+        min_size = 0.5
         max_size = 30
         min_size_ = min(mags) - 1
         max_size_ = max(mags) + 1
@@ -415,7 +416,7 @@ class AnimatedCatalog(Catalog):
             lons, lats, colors, projection=projection, resolution=resolution,
             continent_fill_color=continent_fill_color,
             water_fill_color=water_fill_color, colormap=colormap, title=title,
-            color_label="Depth (km)")
+            color_label="Depth (km)", figsize=figsize)
 
         """ ############# Set up the initial scatters ##################### """
         scatters = []
@@ -447,7 +448,7 @@ class AnimatedCatalog(Catalog):
                 scatters[i] = map_ax.scatter(
                     lons, lats, marker="o", s=size_plot, c=colors, zorder=10,
                     cmap=colormap, transform=ccrs.Geodetic(), alpha=alphas[i])
-            frame_time = catalog_start + (frame * interval)
+            frame_time = catalog_start + (frame * time_step)
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
             if HAS_PROGRESS:
                 bar.update(frame)
@@ -458,7 +459,7 @@ class AnimatedCatalog(Catalog):
 
         if show:
             plt.show()
-        return fig
+        return anim
 
 
 if __name__ == '__main__':
