@@ -449,7 +449,8 @@ class AnimatedCatalog(Catalog):
                     cmap=colormap, transform=ccrs.Geodetic(), alpha=alphas[i])
             frame_time = catalog_start + (frame * interval)
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
-            bar.update(frame)
+            if HAS_PROGRESS:
+                bar.update(frame)
             return scatters, timestamp
 
         anim = FuncAnimation(
