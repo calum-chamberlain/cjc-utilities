@@ -23,6 +23,8 @@ except:
 
 def _get_plot_coords(catalog):
     lats, lons, mags, colors = ([], [], [], [])
+    if len(catalog) == 0:
+        return [None], [None], [], []
     for event in catalog:
         if not event.origins:
             msg = ("Event '%s' does not have an origin and will not be "
@@ -357,7 +359,7 @@ class AnimatedCatalog(Catalog):
     def animate(self, projection='global', resolution='l',
                 continent_fill_color='0.9', water_fill_color='1.0',
                 colormap=None, show=True, title=None, time_step=86400,
-                decay=10, interval=10, figsize=(20, 20), **kwargs):
+                decay=10, interval=10, figsize=(15, 15), **kwargs):
         """
         Animate the catalog in time.
 
@@ -422,8 +424,8 @@ class AnimatedCatalog(Catalog):
         scatters = []
         for _, alpha in zip(catalog_deck, alphas):
             scatters.append(map_ax.scatter(
-                [], [], marker="o", s=[], c=[], zorder=10, cmap=colormap,
-                transform=ccrs.Geodetic(), alpha=alpha))
+                [None], [None], marker="o", s=[], c=[], zorder=10,
+                cmap=colormap, transform=ccrs.Geodetic(), alpha=alpha))
         frame_time = catalog_start - interval
         timestamp = map_ax.text(
             0.05, 0.05, frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"),
@@ -444,10 +446,17 @@ class AnimatedCatalog(Catalog):
                 frac = [(0.2 + (_i - min_size_)) / (max_size_ - min_size_)
                         for _i in mags]
                 size_plot = [(_i * (max_size - min_size)) ** 2 for _i in frac]
-                scatters[i].remove()
-                scatters[i] = map_ax.scatter(
-                    lons, lats, marker="o", s=size_plot, c=colors, zorder=10,
-                    cmap=colormap, transform=ccrs.Geodetic(), alpha=alphas[i])
+                try:
+                    scatters[i].remove()
+                except ValueError:
+                    pass
+                try:
+                    scatters[i] = map_ax.scatter(
+                        lons, lats, marker="o", s=size_plot, c=colors,
+                        zorder=10, cmap=colormap, transform=ccrs.Geodetic(),
+                        alpha=alphas[i])
+                except IndexError:
+                    print("Cannot plot lats: {0} lons: {1}".format(lats, lons))
             frame_time = catalog_start + (frame * time_step)
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
             if HAS_PROGRESS:
@@ -455,7 +464,7 @@ class AnimatedCatalog(Catalog):
             return scatters, timestamp
 
         anim = FuncAnimation(
-            fig, update, frames=frames, interval=interval, repeat=False)
+            fig, update, frames=frames, interval=interval, repeat=True)
 
         if show:
             plt.show()
@@ -464,12 +473,25 @@ class AnimatedCatalog(Catalog):
 
 if __name__ == '__main__':
     from obspy.clients.fdsn import Client
+    from matplotlib import animation
 
     client = Client("GEONET")
     cat = client.get_events(
-        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 1, 2))
+        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 5, 30),
+        maxdepth=60, maxlatitude=-32., minlatitude=-49, minlongitude=164.2,
+        maxlongitude=179.)
+    print("Downloaded catalog of {0} events".format(len(cat)))
     ani_cat = AnimatedCatalog(cat)
+    step = 1800
+    fade_out = 3 * 86400
+    decay = int(round(fade_out / step))
     fig = ani_cat.animate(
-        projection="local", title="test_catalog", show=True, time_step=600,
-        decay=10)
+        projection="local", title="test_catalog", show=False, time_step=step,
+        decay=decay, resolution="h")
+
+    Writer = animation.writers['ffmpeg']
+    writer = Writer(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+
+    fig.save("Test_animation.mp4", writer=writer)
+
 
