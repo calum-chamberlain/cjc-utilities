@@ -38,7 +38,7 @@ def _get_plot_coords(catalog):
             magnitude = event.preferred_magnitude() or event.magnitudes[0]
             mag = magnitude.mag
         except (IndexError, AttributeError):
-            mag = 1
+            mag = 0.1
         mags.append(mag)
         colors.append((origin.get('depth') or np.nan) / 1e3)
     return lats, lons, mags, colors
@@ -409,7 +409,7 @@ class AnimatedCatalog(Catalog):
         if title is None:
             title = "Animated Catalog"
 
-        min_size = 0.5
+        min_size = 0.1
         max_size = 30
         min_size_ = min(mags) - 1
         max_size_ = max(mags) + 1
