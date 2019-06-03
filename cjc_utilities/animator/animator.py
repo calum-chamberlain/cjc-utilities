@@ -69,7 +69,7 @@ def _blank_map(lons, lats, color, projection="global",
                water_fill_color='1.0', colormap=None, colorbar=None,
                title=None, colorbar_ticklabel_format=None,
                color_label="Depth (km)", proj_kwargs=None,
-               figsize=(20, 20), pad=0.05):
+               figsize=(20, 20), pad=0.05, norm=None):
     """
     Plot a map for the region appropriate for the catalog, but do not plot the
     events themselves.
@@ -134,9 +134,6 @@ def _blank_map(lons, lats, color, projection="global",
         subclass of :class:`matplotlib.ticker.Formatter`
     :param colorbar_ticklabel_format: Format string or Formatter used to format
         colorbar tick labels.
-    :type show: bool
-    :param show: Whether to show the figure after plotting or not. Can be used
-        to do further customization of the plot before showing it.
     :type proj_kwargs: dict
     :param proj_kwargs: Keyword arguments to pass to the Cartopy
         :class:`~cartopy.ccrs.Projection`. In this dictionary, you may specify
@@ -303,7 +300,8 @@ def _blank_map(lons, lats, color, projection="global",
     # scatter = map_ax.scatter(lons, lats, marker=marker, s=size, c=color,
     #                          zorder=10, cmap=colormap,
     #                          transform=ccrs.Geodetic())
-    norm = Normalize(vmin=min(color), vmax=max(color))
+    if norm is None:
+        norm = Normalize(vmin=min(color), vmax=max(color))
 
     if title:
         plt.suptitle(title)
@@ -359,7 +357,7 @@ class AnimatedCatalog(Catalog):
     def animate(self, projection='global', resolution='l',
                 continent_fill_color='0.9', water_fill_color='1.0',
                 colormap=None, show=True, title=None, time_step=86400,
-                decay=10, interval=10, figsize=(15, 15), **kwargs):
+                decay=10, interval=10, figsize=(15, 15), fig=None, **kwargs):
         """
         Animate the catalog in time.
 
@@ -376,6 +374,7 @@ class AnimatedCatalog(Catalog):
         """
         import matplotlib.pyplot as plt
         from matplotlib.animation import FuncAnimation
+        from matplotlib.colors import Normalize
         from collections import deque
 
         """################## Set up catalog chunks #######################"""
@@ -405,6 +404,7 @@ class AnimatedCatalog(Catalog):
         # Create the colormap for date based plotting.
         if colormap is None:
             colormap = obspy_sequential
+        norm = Normalize(vmin=min(colors), vmax=max(colors))
 
         if title is None:
             title = "Animated Catalog"
@@ -414,11 +414,15 @@ class AnimatedCatalog(Catalog):
         min_size_ = min(mags) - 1
         max_size_ = max(mags) + 1
 
-        fig, map_ax = _blank_map(
-            lons, lats, colors, projection=projection, resolution=resolution,
-            continent_fill_color=continent_fill_color,
-            water_fill_color=water_fill_color, colormap=colormap, title=title,
-            color_label="Depth (km)", figsize=figsize)
+        if fig is None:
+            fig, map_ax = _blank_map(
+                lons, lats, colors, projection=projection,
+                resolution=resolution,
+                continent_fill_color=continent_fill_color,
+                water_fill_color=water_fill_color, colormap=colormap,
+                title=title, color_label="Depth (km)", figsize=figsize)
+        else:
+            map_ax = fig.gca()
 
         """ ############# Set up the initial scatters ##################### """
         scatters = []
@@ -451,10 +455,11 @@ class AnimatedCatalog(Catalog):
                 except ValueError:
                     pass
                 try:
+                    ## TODO: Check that colors are correct for depth.
                     scatters[i] = map_ax.scatter(
                         lons, lats, marker="o", s=size_plot, c=colors,
                         zorder=10, cmap=colormap, transform=ccrs.Geodetic(),
-                        alpha=alphas[i])
+                        alpha=alphas[i], norm=norm)
                 except IndexError:
                     print("Cannot plot lats: {0} lons: {1}".format(lats, lons))
             frame_time = catalog_start + (frame * time_step)
@@ -477,7 +482,7 @@ if __name__ == '__main__':
 
     client = Client("GEONET")
     cat = client.get_events(
-        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 5, 30),
+        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 1, 4),
         maxdepth=60, maxlatitude=-32., minlatitude=-49, minlongitude=164.2,
         maxlongitude=179.)
     print("Downloaded catalog of {0} events".format(len(cat)))
