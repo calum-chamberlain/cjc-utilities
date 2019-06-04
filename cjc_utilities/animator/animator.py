@@ -395,7 +395,7 @@ class AnimatedCatalog(Catalog):
         alphas = np.linspace(0., 1., decay)
 
         frames = int(round(
-            ((catalog_end - catalog_start) / time_step) + 2 * decay, 0))
+            ((catalog_end - catalog_start) / time_step) + decay / 2, 0))
 
         """#################### Set up the empty figure ####################"""
         # lat/lon coordinates, magnitudes, dates
@@ -410,7 +410,7 @@ class AnimatedCatalog(Catalog):
             title = "Animated Catalog"
 
         min_size = 0.1
-        max_size = 30
+        max_size = 20
         min_size_ = min(mags) - 1
         max_size_ = max(mags) + 1
 
@@ -469,7 +469,7 @@ class AnimatedCatalog(Catalog):
             return scatters, timestamp
 
         anim = FuncAnimation(
-            fig, update, frames=frames, interval=interval, repeat=True)
+            fig, update, frames=frames, interval=interval, repeat=False)
 
         if show:
             plt.show()
