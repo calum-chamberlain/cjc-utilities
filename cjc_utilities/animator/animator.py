@@ -122,10 +122,38 @@ def _blank_map(lons, lats, color, projection="global",
         The event with the smallest `color` property will have the
         color of one end of the colormap and the event with the highest
         `color` property the color of the other end with all other events
-        in between.
-        Defaults to None which will use the default matplotlib colormap.
-    :type colorbar: bool, optional
-    :param colorbar: When left `None`, a colorbar is plotted if more than one
+        in between.    if colorbar is not None:
+        show_colorbar = colorbar
+    else:
+        if len(lons) > 1 and hasattr(color, "__len__") and \
+                not isinstance(color, (str, native_str)):
+            show_colorbar = True
+        else:
+            show_colorbar = False
+        Defaults to None which will    if colorbar is not None:
+        show_colorbar = colorbar
+    else:
+        if len(lons) > 1 and hasattr(color, "__len__") and \
+                not isinstance(color, (str, native_str)):
+            show_colorbar = True
+        else:
+            show_colorbar = False use the default matplotlib colormap.
+    :type colorbar: bool, optional    if colorbar is not None:
+        show_colorbar = colorbar
+    else:
+        if len(lons) > 1 and hasattr(color, "__len__") and \
+                not isinstance(color, (str, native_str)):
+            show_colorbar = True
+        else:
+            show_colorbar = False
+    :param colorbar: When left `Non    if colorbar is not None:
+        show_colorbar = colorbar
+    else:
+        if len(lons) > 1 and hasattr(color, "__len__") and \
+                not isinstance(color, (str, native_str)):
+            show_colorbar = True
+        else:
+            show_colorbar = Falsee`, a colorbar is plotted if more than one
         object is plotted. Using `True`/`False` the colorbar can be forced
         on/off.
     :type title: str
@@ -245,6 +273,7 @@ def _blank_map(lons, lats, color, projection="global",
         msg = "Projection '%s' not supported." % projection
         raise ValueError(msg)
 
+    # TODO: Add option to show cumulative plot
     if show_colorbar:
         map_ax = fig.add_axes([ax_x0, 0.13, ax_width, 0.77], projection=proj)
         cm_ax = fig.add_axes([ax_x0, 0.05, ax_width, 0.05])
@@ -450,26 +479,20 @@ class AnimatedCatalog(Catalog):
                 frac = [(0.2 + (_i - min_size_)) / (max_size_ - min_size_)
                         for _i in mags]
                 size_plot = [(_i * (max_size - min_size)) ** 2 for _i in frac]
-                try:
-                    scatters[i].remove()
-                except ValueError:
-                    pass
-                try:
-                    ## TODO: Check that colors are correct for depth.
-                    scatters[i] = map_ax.scatter(
-                        lons, lats, marker="o", s=size_plot, c=colors,
-                        zorder=10, cmap=colormap, transform=ccrs.Geodetic(),
-                        alpha=alphas[i], norm=norm)
-                except IndexError:
-                    print("Cannot plot lats: {0} lons: {1}".format(lats, lons))
+                # lons, lats needs to be transformed
+                scatters[i].set_offsets(list(zip(lons, lats)))
+                # Colors needs to be sequence of rgba tuples
+                scatters[i].set_color(colormap(norm(colors), alphas[i]))
+                scatters[i].set_sizes(size_plot)
             frame_time = catalog_start + (frame * time_step)
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
             if HAS_PROGRESS:
                 bar.update(frame)
-            return scatters, timestamp
+            return scatters
 
         anim = FuncAnimation(
-            fig, update, frames=frames, interval=interval, repeat=False)
+            fig, update, frames=frames, interval=interval, repeat=False,
+            blit=True)
 
         if show:
             plt.show()
@@ -482,8 +505,8 @@ if __name__ == '__main__':
 
     client = Client("GEONET")
     cat = client.get_events(
-        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 1, 4),
-        maxdepth=60, maxlatitude=-32., minlatitude=-49, minlongitude=164.2,
+        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 5, 20),
+        maxdepth=120, maxlatitude=-32., minlatitude=-49, minlongitude=164.2,
         maxlongitude=179.)
     print("Downloaded catalog of {0} events".format(len(cat)))
     ani_cat = AnimatedCatalog(cat)
@@ -491,11 +514,11 @@ if __name__ == '__main__':
     fade_out = 3 * 86400
     decay = int(round(fade_out / step))
     fig = ani_cat.animate(
-        projection="local", title="test_catalog", show=False, time_step=step,
+        projection="local", title="GeoNet Catalog", show=False, time_step=step,
         decay=decay, resolution="h")
 
     Writer = animation.writers['ffmpeg']
-    writer = Writer(fps=15, metadata=dict(artist="Me"), bitrate=1800)
+    writer = Writer(fps=45, metadata=dict(artist="Me"), bitrate=1800)
 
     fig.save("Test_animation.mp4", writer=writer)
 
