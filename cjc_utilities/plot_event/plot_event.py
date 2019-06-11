@@ -7,7 +7,8 @@ Calum Chamberlain
 import numpy as np
 
 def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
-                           all_channels=False, filt=None, ignore_rotated=True):
+                           all_channels=False, filt=None, ignore_rotated=True,
+                           return_stream=False):
     """
     Plot the waveforms for an event with pick and calculated arrival times.
 
@@ -20,7 +21,7 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
     :param all_channels: Whether to download all channels from that sensor.
     """
     from obspy import Stream
-    from obspy.clients.fdsn.client import FDSNNoDataException
+    from obspy.clients.fdsn.client import FDSNNoDataException, FDSNException
 
     try:
         origin_time = event.preferred_origin().time or event.origins[0].time
@@ -45,7 +46,7 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
             bulk.append(chan_info)
     try:
         st = client.get_waveforms_bulk(bulk)
-    except FDSNNoDataException as e:
+    except (FDSNNoDataException, FDSNException) as e:
         print("No data exception - trying individual channels")
         st = Stream()
         for chan_info in bulk:
@@ -54,10 +55,13 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
                     network=chan_info[0], station=chan_info[1],
                     location=chan_info[2], channel=chan_info[3],
                     starttime=chan_info[4], endtime=chan_info[5])
+                print("Downloaded for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
             except FDSNNoDataException:
                 print("No data for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
     if filt:
         st.detrend().filter('bandpass', freqmin=filt[0], freqmax=filt[1])
+    if return_stream:
+        return plot_event(event, st, length=length, size=size), st
     return plot_event(event, st, length=length, size=size)
 
 
@@ -176,3 +180,54 @@ def _plot_channel(ax, tr, picks=[], arrivals=[], lines=[], labels=[]):
     ax.set_ylabel(tr.id, rotation=0, horizontalalignment="right")
     ax.yaxis.set_ticks([])
     return lines, labels, min_x, max_x
+
+
+if __name__ == "__main__":
+    from obspy.clients.fdsn import Client
+    import matplotlib.pyplot as plt
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Download and plot waveforms and picks for an FDSN event")
+    parser.add_argument(
+        "-c", "--client", help="Client name parsable by obspy", required=False,
+        default="GEONET", type=str)
+    parser.add_argument(
+        "-i", "--eventid", help="FDSN event id", required=True, type=str)
+    parser.add_argument(
+        "-l", "--length", help="Length of data stream in seconds", 
+        required=False, type=float, default=60.)
+    parser.add_argument(
+        "-n", "--n-stations", help="Limit the number of stations to download",
+        required=False, type=int, default=None)
+    parser.add_argument(
+        "-a", "--all-channels", 
+        help="Flag to download all (not just the picked) channels", 
+        required=False, action="store_true")
+    
+    args = vars(parser.parse_args())
+
+    client = Client(args["client"])
+    event = client.get_events(eventid=args["eventid"])[0]
+
+    if args["n_stations"] is not None:
+        sorted_picks = sorted(event.picks, key=lambda p: p.time)
+        stations_to_use = []
+        n_stations = 0
+        for pick in sorted_picks:
+            if pick.waveform_id.station_code not in stations_to_use:
+                stations_to_use.append(pick.waveform_id.station_code)
+                n_stations += 1
+            if n_stations == args["n_stations"]:
+                break
+        else:
+            print("Using all stations")
+        event.picks = [p for p in event.picks 
+                       if p.waveform_id.station_code in stations_to_use]
+    
+    fig, st = plot_event_from_client(
+        event=event, client=client, length=args["length"], return_stream=True,
+        all_channels=args["all_channels"])
+    st.write("{0}.ms".format(args["eventid"]), format="MSEED")
+    event.write("{0}.xml".format(args["eventid"]), format="QUAKEML")
+    plt.show()
