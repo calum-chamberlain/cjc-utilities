@@ -6,6 +6,7 @@ Calum Chamberlain
 
 import numpy as np
 
+
 def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
                            all_channels=False, filt=None, ignore_rotated=True,
                            return_stream=False):
@@ -65,7 +66,7 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
     return plot_event(event, st, length=length, size=size)
 
 
-def plot_event(event, st, length=60., size=(10.5, 10.5)):
+def plot_event(event, st, length=60., size=(10.5, 10.5), fig=None):
     """
     Plot the waveforms for an event with pick and calculated arrival times.
 
@@ -83,15 +84,19 @@ def plot_event(event, st, length=60., size=(10.5, 10.5)):
     except AttributeError:
         # If there isn't an origin time, use the start of the stream
         origin_time = st[0].stats.starttime
-    st = st.slice(origin_time, origin_time + length)
+    if length:
+        st = st.slice(origin_time, origin_time + length)
     # Trim the event around the origin time
-    fig, axes = plt.subplots(len(st), 1, sharex=True, figsize=size)
+    fig = fig or plt.figure()
+    fig.set_size_inches(size)
+    axes = fig.subplots(len(st), 1, sharex=True)
     if len(st) == 1:
         axes = [axes]
     lines, labels = ([], [])
     min_x = []
     max_x = []
     for ax, tr in zip(axes, st):
+        ax.cla()
         picks, arrivals = ([], [])
         for pick in event.picks:
             if pick.waveform_id.station_code == tr.stats.station:
