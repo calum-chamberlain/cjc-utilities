@@ -23,6 +23,8 @@ def read_hypoDD(reloc, mapper=None):
         hypoDD_id, origin = _read_hypoDD_origin(origin_line)
         if mapper is not None:
             event_id = mapper.get(hypoDD_id, hypoDD_id)
+        else:
+            event_id = hypoDD_id
         origins.update({event_id: origin})
     return origins
 
@@ -36,7 +38,7 @@ def _read_hypoDD_origin(origin_line):
     (event_id, lat, lon, dep, x, y, z, ex, ey, ez, yr, mo, dy, hr, mi, sc, 
      mag, nccp, nccs, nctp, ncts, rcc, rct, cid) = l
     origin_time = UTCDateTime(
-        int(yr), int(mo), int(dy), int(hr), int(mi), float(sc))
+        int(yr), int(mo), int(dy), int(hr), int(mi)) + float(sc)
 
     origin = Origin(
         time=origin_time, latitude=float(lat), longitude=float(lon),
