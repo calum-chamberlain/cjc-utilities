@@ -16,8 +16,9 @@ PICK_STR = ("{station:5s} {phase:1s} {weight:1d}   {travel_time:.5f}")
 
 
 def write_simul(catalog: Catalog, filename: str):
-    event_str = "\n".join(
-        [_get_simul_string(event) for event in catalog])
+    event_str = [_get_simul_string(event) for event in catalog]
+    event_str = [_ for _ in event_str if _]
+    event_str = "\n    0\n".join(event_str)
     with open(filename, "w") as f:
         f.write(event_str)
     return
@@ -50,7 +51,13 @@ def _get_simul_string(event: Event) -> str:
         nobs=len(event.picks), dunno=100, dunnoTwo=0, 
         event_id=event.resource_id.id.split('/')[-1]))
     
-    for pick in event.picks:
+    # Only write out P and S with P - SIMUL uses S-P time, not S-time
+    p_picked_stations = {p.waveform_id.station_code for p in event.picks 
+                         if p.phase_hint.startswith("P")}
+    if len(p_picked_stations) == 0:
+        return None
+    picks = [p for p in event.picks if p.waveform_id.station_code in p_picked_stations]
+    for pick in picks:
         out.append(PICK_STR.format(
             station=pick.waveform_id.station_code,
             phase=pick.phase_hint,
