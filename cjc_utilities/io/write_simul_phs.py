@@ -21,6 +21,7 @@ def write_simul(catalog: Catalog, filename: str):
     event_str = "\n    0\n".join(event_str)
     with open(filename, "w") as f:
         f.write(event_str)
+        f.write("\n    0")
     return
 
 
