@@ -9,7 +9,7 @@ from obspy.core.event import (
 from obspy.geodetics import kilometers2degrees
 
 
-def read_simul(phase_file: str, location_file: str) -> Catalog:
+def read_simul(phase_file: str, location_file: str, max_sep: float = 5.0) -> Catalog:
     """ 
     Read SIMUL output to Obspy.
 
@@ -19,6 +19,9 @@ def read_simul(phase_file: str, location_file: str) -> Catalog:
         The input phase file for SIMUL
     location_file:
         The output location file from SIMUL
+    max_sep:
+        Maximum separation (in seconds) between new and old origin time 
+        for a match.
     
     Returns
     -------
@@ -41,6 +44,7 @@ def read_simul(phase_file: str, location_file: str) -> Catalog:
             event = []
         elif len(line) > 0 and not line.startswith("  DATE"):
             event.append(line)
+    events.append(event)
     
     input_origins = _get_input_origins(
         origin_lines=[line for line in phase_lines if len(line) > 30])
@@ -52,8 +56,10 @@ def read_simul(phase_file: str, location_file: str) -> Catalog:
             [(key, abs(event.origins[0].time - value))
              for key, value in input_origins.items()],
             key=lambda e: e[1])
-        if matched_origins[0][1] > 5.0:
-            raise ValueError("No origin found within 5s of original...")
+        if max_sep and matched_origins[0][1] > max_sep:
+            print(f"No origin found within {max_sep}s of original...")
+            print(event.origins[0])
+            continue
         event_id = matched_origins[0][0]
         event.resource_id = ResourceIdentifier(event_id)
         catalog += event
@@ -84,13 +90,22 @@ def _convert_event_lines(lines: list) -> Event:
         year=2000 + int(lines[0][1:3]), month=int(lines[0][3:5]),
         day=int(lines[0][5:7]), hour=int(lines[0][8:10]),
         minute=int(lines[0][10:12])) + float(lines[0][13:18])
-    latitude= float(lines[0][19:21]) + float(lines[0][22:26]) / 60
-    if lines[0][21] == "S":
+    try:
+        latitude= float(lines[0][19:21]) + float(lines[0][22:26]) / 60
+    except ValueError:
+        latitude = None
+    if latitude and lines[0][21] == "S":
         latitude *= -1
-    longitude = float(lines[0][28:31]) + float(lines[0][32:37]) / 60
-    if lines[0][31] == "W":
+    try:
+        longitude = float(lines[0][28:31]) + float(lines[0][32:37]) / 60
+    except ValueError:
+        longitude = None
+    if longitude and lines[0][31] == "W":
         longitude *= -1
-    depth = float(lines[0][37:44]) * 1000.0  # Obspy depths are in m
+    try:
+        depth = float(lines[0][37:44]) * 1000.0  # Obspy depths are in m
+    except ValueError:
+        depth = None
     magnitude = float(lines[0][46:51])
     nobs = int(lines[0][51:54])
     rms = float(lines[0][62:])
@@ -143,15 +158,18 @@ def _extract_pick_info(
         toa = int(line[18:21])
         hour = int(line[27:29])
         minute = int(line[29:31])
-        seconds = float(line[33:38])
+        seconds = float(line[32:38])
         pick_time = UTCDateTime(
             year=origin_time.year, month=origin_time.month, 
             day=origin_time.day, hour=hour, minute=minute) + seconds
     else:
         toa = None
         pick_time = p_time + float(line[40:45])
-    time_residual = float(line[53:59])
-    pwt = float(line[60:])  # I don't know what this is?
+    if line[53:59] != " *****":
+        time_residual = float(line[53:59])
+    else:
+        time_residual = None
+    pwt = float(line[60:])  # This is pick-weight
 
     pick = Pick(
         time=pick_time, waveform_id=WaveformStreamID(station_code=station),

@@ -9,7 +9,7 @@ import numpy as np
 
 def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
                            all_channels=False, filt=None, ignore_rotated=True,
-                           return_stream=False):
+                           return_stream=False, fig=None):
     """
     Plot the waveforms for an event with pick and calculated arrival times.
 
@@ -62,8 +62,8 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
     if filt:
         st.detrend().filter('bandpass', freqmin=filt[0], freqmax=filt[1])
     if return_stream:
-        return plot_event(event, st, length=length, size=size), st
-    return plot_event(event, st, length=length, size=size)
+        return plot_event(event, st, length=length, size=size, fig=fig), st
+    return plot_event(event, st, length=length, size=size, fig=fig)
 
 
 def plot_event(event, st, length=60., size=(10.5, 10.5), fig=None):
@@ -116,8 +116,7 @@ def plot_event(event, st, length=60., size=(10.5, 10.5), fig=None):
         max_x.append(chan_max_x)
     axes[-1].set_xlim([np.min(min_x), np.max(max_x)])
     axes[-1].set_xlabel("Time")
-    plt.tight_layout()
-    plt.subplots_adjust(hspace=0)
+    fig.subplots_adjust(hspace=0, wspace=0)
     fig.legend(lines, labels)
     return fig
 

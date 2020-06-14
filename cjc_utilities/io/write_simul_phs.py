@@ -15,17 +15,19 @@ HEAD_STR = (
 PICK_STR = ("{station:5s} {phase:1s} {weight:1d}   {travel_time:.5f}")
 
 
-def write_simul(catalog: Catalog, filename: str):
-    event_str = [_get_simul_string(event) for event in catalog]
+def write_simul(catalog: Catalog, filename: str, min_stations: int = 5) -> int:
+    event_str = [_get_simul_string(event, min_stations=min_stations)
+                 for event in catalog]
     event_str = [_ for _ in event_str if _]
+    # print(f"Writing {len(event_str)} events to file.")
     event_str = "\n    0\n".join(event_str)
     with open(filename, "w") as f:
         f.write(event_str)
-        f.write("\n    0")
-    return
+        f.write("\n    0\n")
+    return len(event_str)
 
 
-def _get_simul_string(event: Event) -> str:
+def _get_simul_string(event: Event, min_stations: int) -> str:
     out = []
     try:
         origin = event.preferred_origin() or event.origins[0]
@@ -35,7 +37,7 @@ def _get_simul_string(event: Event) -> str:
     try:
         magnitude = event.preferred_magnitude() or event.magnitudes[0]
     except IndexError:
-        print("No magnitude found, setting to 0.0")
+        # print("No magnitude found, setting to 0.0")
         _magnitude = namedtuple("fake_magnitude", ["mag"])
         magnitude = _magnitude(0.0)
     lat, n_s, lat_min = _deg_to_deg_dec_min(origin.latitude, "latitude")
@@ -55,7 +57,7 @@ def _get_simul_string(event: Event) -> str:
     # Only write out P and S with P - SIMUL uses S-P time, not S-time
     p_picked_stations = {p.waveform_id.station_code for p in event.picks 
                          if p.phase_hint.startswith("P")}
-    if len(p_picked_stations) == 0:
+    if len(p_picked_stations) < min_stations or len(p_picked_stations) == 0:
         return None
     picks = [p for p in event.picks if p.waveform_id.station_code in p_picked_stations]
     for pick in picks:
