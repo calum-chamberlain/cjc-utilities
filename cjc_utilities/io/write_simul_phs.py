@@ -44,11 +44,18 @@ def _get_simul_string(event: Event, min_stations: int) -> str:
     lon, e_w, lon_min = _deg_to_deg_dec_min(origin.longitude, "longitude")
     depth = origin.depth / 1000.
 
+    origin_time = origin.time
+    for pick in event.picks:
+        # SIMUL does not cope with negative pick times, but the origin time 
+        # doesn't matter that much.
+        if origin_time > pick.time:
+            origin_time = pick.time - 5
+
     out.append(HEAD_STR.format(
-        year=origin.time.year % 100, month=origin.time.month, 
-        day=origin.time.day, hour=origin.time.hour, 
-        minute=origin.time.minute,
-        seconds=origin.time.second + (origin.time.microsecond / 1e6),
+        year=origin_time.year % 100, month=origin_time.month, 
+        day=origin_time.day, hour=origin_time.hour, 
+        minute=origin_time.minute,
+        seconds=origin_time.second + (origin_time.microsecond / 1e6),
         lat=lat, N_S=n_s, lat_min=lat_min, lon=lon, E_W=e_w, 
         lon_min=lon_min, depth=depth, magnitude=magnitude.mag,
         nobs=len(event.picks), dunno=100, dunnoTwo=0, 
@@ -61,11 +68,14 @@ def _get_simul_string(event: Event, min_stations: int) -> str:
         return None
     picks = [p for p in event.picks if p.waveform_id.station_code in p_picked_stations]
     for pick in picks:
+        if not pick.phase_hint.startswith(("P", "S")):
+            # SIMUL will silently crash on other types of pick :(
+            continue
         out.append(PICK_STR.format(
             station=pick.waveform_id.station_code,
             phase=pick.phase_hint,
             weight=1,
-            travel_time=pick.time - origin.time))
+            travel_time=pick.time - origin_time))
 
     return "\n".join(out)
 
