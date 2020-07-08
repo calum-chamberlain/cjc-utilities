@@ -208,6 +208,9 @@ if __name__ == "__main__":
         "-a", "--all-channels", 
         help="Flag to download all (not just the picked) channels", 
         required=False, action="store_true")
+    parser.add_argument(
+        "-o", "--outfile", default=None,
+        help="Outfile to save figure to, if not set, will show to screen")
     
     args = vars(parser.parse_args())
 
@@ -234,4 +237,7 @@ if __name__ == "__main__":
         all_channels=args["all_channels"])
     st.write("{0}.ms".format(args["eventid"]), format="MSEED")
     event.write("{0}.xml".format(args["eventid"]), format="QUAKEML")
-    plt.show()
+    if args.outfile:
+        fig.savefig(outfile)
+    else:
+        plt.show()
