@@ -10,7 +10,7 @@ setup(
     license='GPL',
     packages=[
         'cjc_utilities', 'cjc_utilities.animator', 'cjc_utilities.get_data',
-        'cjc_utilities.sac2nordic', 'cjc_utilities.coordinates',
+        'cjc_utilities.coordinates',
         'cjc_utilities.plot_event', 'cjc_utilities.io'],
     zip_safe=False,
     scripts=["cjc_utilities/plot_event/plot_event.py"]

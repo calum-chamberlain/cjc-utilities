@@ -11,7 +11,7 @@ from datetime import datetime as dt
 EARTHRADIUS = 6371  # Global definition of earth radius in km.
 
 
-class Location():
+class Location(object):
     """
     Location in x, y, z in some co-ordinate system.
     """
@@ -77,7 +77,7 @@ class Location():
         return geog
 
 
-class Geographic():
+class Geographic(object):
     """
     Geographic position in lat, long and depth as deg, deg, km (+ve down)
     """
