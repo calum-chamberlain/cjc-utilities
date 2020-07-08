@@ -6,6 +6,7 @@ Calum Chamberlain
 
 import numpy as np
 
+
 def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
                            all_channels=False, filt=None, ignore_rotated=True,
                            return_stream=False, fig=None):
@@ -83,7 +84,8 @@ def plot_event(event, st, length=60., size=(10.5, 10.5), fig=None):
     except AttributeError:
         # If there isn't an origin time, use the start of the stream
         origin_time = st[0].stats.starttime
-    st = st.slice(origin_time, origin_time + length)
+    if length:
+        st = st.slice(origin_time, origin_time + length)
     # Trim the event around the origin time
     if fig:
         fig.clear()
@@ -96,6 +98,7 @@ def plot_event(event, st, length=60., size=(10.5, 10.5), fig=None):
     min_x = []
     max_x = []
     for ax, tr in zip(axes, st):
+        ax.cla()
         picks, arrivals = ([], [])
         for pick in event.picks:
             if pick.waveform_id.station_code == tr.stats.station:
@@ -207,6 +210,9 @@ if __name__ == "__main__":
         "-a", "--all-channels", 
         help="Flag to download all (not just the picked) channels", 
         required=False, action="store_true")
+    parser.add_argument(
+        "-o", "--outfile", default=None,
+        help="Outfile to save figure to, if not set, will show to screen")
     
     args = vars(parser.parse_args())
 
@@ -233,4 +239,8 @@ if __name__ == "__main__":
         all_channels=args["all_channels"])
     st.write("{0}.ms".format(args["eventid"]), format="MSEED")
     event.write("{0}.xml".format(args["eventid"]), format="QUAKEML")
-    plt.show()
+    if args["outfile"]:
+        fig.savefig(args["outfile"])
+        print(f"Saved plot to {args['outfile']}")
+    else:
+        plt.show()
