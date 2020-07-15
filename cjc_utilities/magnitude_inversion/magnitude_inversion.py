@@ -243,15 +243,15 @@ def find_matching_events(
     depth_difference
         Maximum allowed difference in depth in km between matching events.
     magnitude_type
-        Magnitude type for comparison, will only return events in catalog_2
+        Magnitude type for comparison, will only return events in catalog_1
         with this magnitude
 
     Returns
     -------
     Dictionary of matching events ids. Keys will be from catalog_1.
     """
-    df_1 = summarize_catalog(catalog_1)
-    df_2 = summarize_catalog(catalog_2, magnitude_type=magnitude_type)
+    df_1 = summarize_catalog(catalog_1, magnitude_type=magnitude_type)
+    df_2 = summarize_catalog(catalog_2)
     if len(df_2) == 0:
         return None
 
@@ -334,9 +334,22 @@ def get_comparison_catalog(
     max_lon = max(_get_origin_attrib(ev, "longitude") 
                   for ev in catalog) + region_tolerance
 
-    comparison_cat = client.get_events(
-        starttime=starttime, endtime=endtime, minlatitude=min_lat, 
-        maxlatitude=max_lat, minlongitude=min_lon, maxlongitude=max_lon)
+    if (endtime - starttime) / (24 * 3600) > 30:
+        comparison_cat = Catalog()
+        _starttime, _endtime = starttime, starttime + (30 * 34 * 3600)
+        while _endtime <= endtime:
+            comparison_cat += client.get_events(
+                starttime=_starttime, endtime=_endtime, minlatitude=min_lat, 
+                maxlatitude=max_lat, minlongitude=min_lon, maxlongitude=max_lon)
+            _starttime += (30 * 34 * 3600)
+            _endtime += (30 * 34 * 3600)
+        comparison_cat += client.get_events(
+            starttime=_starttime, endtime=endtime, minlatitude=min_lat, 
+            maxlatitude=max_lat, minlongitude=min_lon, maxlongitude=max_lon)
+    else:
+        comparison_cat = client.get_events(
+            starttime=starttime, endtime=endtime, minlatitude=min_lat, 
+            maxlatitude=max_lat, minlongitude=min_lon, maxlongitude=max_lon)
     return comparison_cat
 
 
