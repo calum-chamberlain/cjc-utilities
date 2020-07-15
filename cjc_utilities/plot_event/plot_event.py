@@ -87,8 +87,10 @@ def plot_event(event, st, length=60., size=(10.5, 10.5), fig=None):
     if length:
         st = st.slice(origin_time, origin_time + length)
     # Trim the event around the origin time
-    fig = fig or plt.figure()
-    fig.set_size_inches(size)
+    if fig:
+        fig.clear()
+    else:
+        fig = plt.figure(figsize=size)
     axes = fig.subplots(len(st), 1, sharex=True)
     if len(st) == 1:
         axes = [axes]
@@ -116,7 +118,7 @@ def plot_event(event, st, length=60., size=(10.5, 10.5), fig=None):
         max_x.append(chan_max_x)
     axes[-1].set_xlim([np.min(min_x), np.max(max_x)])
     axes[-1].set_xlabel("Time")
-    fig.subplots_adjust(hspace=0, wspace=0)
+    plt.subplots_adjust(hspace=0)
     fig.legend(lines, labels)
     return fig
 
@@ -182,7 +184,7 @@ def _plot_channel(ax, tr, picks=[], arrivals=[], lines=[], labels=[]):
         elif arrival_time.datetime < min_x:
             min_x = arrival_time.datetime
     ax.set_ylabel(tr.id, rotation=0, horizontalalignment="right")
-    ax.yaxis.set_ticks([])
+    ax.yaxis.tick_right()
     return lines, labels, min_x, max_x
 
 
@@ -208,6 +210,9 @@ if __name__ == "__main__":
         "-a", "--all-channels", 
         help="Flag to download all (not just the picked) channels", 
         required=False, action="store_true")
+    parser.add_argument(
+        "-o", "--outfile", default=None,
+        help="Outfile to save figure to, if not set, will show to screen")
     
     args = vars(parser.parse_args())
 
@@ -234,4 +239,8 @@ if __name__ == "__main__":
         all_channels=args["all_channels"])
     st.write("{0}.ms".format(args["eventid"]), format="MSEED")
     event.write("{0}.xml".format(args["eventid"]), format="QUAKEML")
-    plt.show()
+    if args["outfile"]:
+        fig.savefig(args["outfile"])
+        print(f"Saved plot to {args['outfile']}")
+    else:
+        plt.show()

@@ -10,7 +10,7 @@ setup(
     license='GPL',
     packages=[
         'cjc_utilities', 'cjc_utilities.animator', 'cjc_utilities.get_data',
-        'cjc_utilities.sac2nordic', 'cjc_utilities.coordinates',
+        'cjc_utilities.coordinates',
         'cjc_utilities.plot_event', 'cjc_utilities.io', 
         'cjc_utilities.magnitude_inversion'],
     zip_safe=False,
