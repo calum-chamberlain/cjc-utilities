@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 import warnings
 
+import matplotlib.pyplot as plt
+
 from typing import Union, Tuple
 
 from progressbar import ProgressBar
@@ -22,6 +24,9 @@ from obspy.geodetics import gps2dist_azimuth, degrees2kilometers
 from obspy.core.event import (
     Magnitude, StationMagnitude, StationMagnitudeContribution, 
     ResourceIdentifier, Catalog, Event, Amplitude, Arrival)
+
+
+plt.style.use("ggplot")
 
 
 MIN_CONSTRAINTS = 20  # Minimum number of matched events to constrain the inversion
@@ -180,15 +185,22 @@ def summarize_amplitudes(
                               if _.type in ["IAML", "AML", "ML"]])
     out = pd.DataFrame(
         index=np.arange(total_observations), 
-        columns=("event_id", "origin_time", "depth", "latitude", "longitude",
+        columns=("event_id", "depth", # "origin_time", "latitude", "longitude",
                  "epicentral_distance", "seed_id", "amplitude", 
-                 "period", "seisan_magnitude", "namps"))
+                 "period", "seisan_magnitude")) # , "namps"))
     
     i = 0
+    bar = ProgressBar(max_value=total_observations)
     for ev in catalog:
         ori = ev.preferred_origin() or ev.origins[-1]
         namps = len([amp for amp in ev.amplitudes 
                      if amp.type in ["IAML", "AML", "ML"]])
+        rid, ori_time, depth, lat, lon = (
+            ev.resource_id.id.split('/')[-1],
+            _get_origin_attrib(ev, "time"),
+            _get_origin_attrib(ev, "depth") / 1000.0,
+            _get_origin_attrib(ev, "latitude"),
+            _get_origin_attrib(ev, "longitude"))
         for amplitude in ev.amplitudes:
             if amplitude.type not in  ["IAML", "AML", "ML"]:
                 continue         
@@ -200,11 +212,11 @@ def summarize_amplitudes(
 
             epi_dist = degrees2kilometers(arrival.distance)
 
-            out.event_id[i] = ev.resource_id.id.split('/')[-1]
-            out.origin_time[i] = _get_origin_attrib(ev, "time")
-            out.depth[i] = _get_origin_attrib(ev, "depth") / 1000.0
-            out.latitude[i] = _get_origin_attrib(ev, "latitude")
-            out.longitude[i] = _get_origin_attrib(ev, "longitude")
+            out.event_id[i] = rid
+            # out.origin_time[i] = ori_time
+            out.depth[i] = depth
+            # out.latitude[i] = lat
+            # out.longitude[i] = lon 
             out.epicentral_distance[i] = epi_dist
             out.seed_id[i] = amplitude.waveform_id.get_seed_string()
             out.amplitude[i] = amp
@@ -212,8 +224,17 @@ def summarize_amplitudes(
             out.seisan_magnitude[i] = (
                 np.log10(amp * 1000) + np.log10(epi_dist) + 
                 (0.0067 * 0.4343 * amp * 1000))
-            out.namps[i] = namps
+            # out.namps[i] = namps
             i += 1
+            bar.update(i)
+    bar.finish()
+    # Set dtypes
+    floating_columns = (
+        "depth", "epicentral_distance", "amplitude", "period", 
+        "seisan_magnitude")
+
+    for column in floating_columns:
+        out[column] = out[column].astype(np.float32)
     return out.dropna(how="all")
             
 
@@ -400,11 +421,21 @@ def insert_magnitude(
             station_magnitude_type=mag_type,
             method_id=ResourceIdentifier("smi:local/magnitude_inversion_CJC"))
         station_magnitudes.append(station_magnitude)
-        
+    
+    if len(station_magnitudes) == 0:
+        print("No suitable amplitudes")
+        return event_out
+    
+    if magnitude is None:
+        magnitude = sum(
+            sta_mag.mag for sta_mag in station_magnitudes) / len(station_magnitudes)
+        method = "smi:local/station-mean"
+    else:
+        method = "smi:local/magnitude_inversion_CJC"
     final_magnitude = Magnitude(
         mag=magnitude, magnitude_type=mag_type, 
         station_count=len(station_magnitudes),
-        method_id=ResourceIdentifier("smi:local/magnitude_inversion_CJC"),
+        method_id=ResourceIdentifier(method),
         station_magnitude_contributions=[
             StationMagnitudeContribution(
                 sta_mag.resource_id, residual=sta_mag.mag - magnitude)
@@ -414,6 +445,86 @@ def insert_magnitude(
     event_out.magnitudes.append(final_magnitude)
     event_out.preferred_magnitude_id = final_magnitude.resource_id
     return event_out
+
+
+def residual_plot(residuals: np.array) -> plt.Figure:
+    """ Plot residuals from magnitude inversion. """
+    fig, ax = plt.subplots()
+    nbins = max(10, len(residuals) // 20)
+    n, bins, _ = ax.hist(residuals, bins=nbins)
+    ax.set_xlabel("Magnitude residual")
+    ax.set_ylabel("Count")
+    
+    sigma = res.std()
+    mu = res.mean()
+
+    # Add a best fit normal distribution
+    y = ((1 / (np.sqrt(2 * np.pi) * sigma)) * np.exp(-0.5 * (1 / sigma * (bins - mu)) ** 2))
+    y /= y.max()
+    y *= n.max()
+    # ax1 = ax.twinx()
+    ax.plot(bins, y, '--')
+    
+    ax.set_title(
+        f"Inverted magnitude residuals, mean: {mu:.3f}, standard dev: {sigma:.3f}")
+    return fig
+
+
+def decay_plot(
+    mag_data: pd.DataFrame, 
+    gamma: float, 
+    frequency_dependent: bool
+) -> plt.Figure:
+    """ 
+    Replicate the period, amplitude and residual plot of Boese et al., 2012 (Fig 7). 
+    """
+    fig, axes = plt.subplots(nrows=3, sharex=True)
+
+    period_ax = axes[0]
+    distance_corr_ax = axes[1]
+    residual_ax = axes[2]
+
+    if "hypocentral_distance" not in mag_data.columns:
+        assert "depth" in mag_data.columns, "Needs a depth column"
+        assert "epicentral_distance" in mag_data.columns, "Needs an epicentral_distance column"
+        hyp_dist = (mag_data.depth ** 2 + mag_data.epicentral_distance ** 2) ** .5
+        mag_data["hypocentral_distance"] = hyp_dist
+
+    required_columns = ("period", "residual", "hypocentral_distance")
+    for col in required_columns:
+        assert col in mag_data.columns, f"Needs a column: {col}"
+
+    period_ax.plot(mag_data.hypocentral_distance, mag_data.period, 
+                   marker="+", linestyle='None')
+    period_ax.set_ylabel("Period at maximum amplitude (s)")
+
+    if frequency_dependent:
+        gammaf = gamma / mag_data.period
+    else:
+        gammaf = gamma
+    dist_corr = np.log10(mag_data.hypocentral_distance) + (
+        0.4343 * gammaf * mag_data.hypocentral_distance)
+    distance_corr_ax.plot(mag_data.hypocentral_distance, dist_corr, 
+                          marker="+", label="Calculated", linestyle='None')
+    # Plot a line set to 1 Hz
+    distances = np.arange(0.1, mag_data.hypocentral_distance.max(), 1.0)
+    for freq in (1., 5., 10.):
+        fit = np.log10(distances) + 0.4343 * gamma * freq * distances
+        distance_corr_ax.plot(distances, fit, label=f"$\gamma({freq} Hz)={gamma * freq:.3f}$")
+    distance_corr_ax.set_ylabel("Distance correction term")
+    distance_corr_ax.legend()
+
+    residual_ax.plot(mag_data.hypocentral_distance, mag_data.residual, 
+                     marker="+", label="Residuals", linestyle='None')
+    gradient, intercept = np.polyfit(
+        mag_data.hypocentral_distance, mag_data.residual, 1)
+    residual_ax.plot(distances, gradient * distances + intercept, 
+                     label=f"Fit, ${gradient:.3f}\Delta + {intercept:.3f}$")
+    residual_ax.legend()
+    residual_ax.set_ylabel("Magnitude residual")
+    residual_ax.set_xlabel("Hypocentral distance (km)")
+
+    return fig
 
 
 def magnitude_inversion(
@@ -428,6 +539,7 @@ def magnitude_inversion(
     frequency_dependent: bool = True,
     frequency: float = 5.0,
     plot: bool = False,
+    only_matched: bool = False,
 ) -> Tuple[Catalog, float, dict]:
     """
     Compute magnitude scale for a given catalogue compared to another.
@@ -470,6 +582,9 @@ def magnitude_inversion(
         `frequency_dependent == False`)
     plot:
         Whether to make plots or not. Plots are shown to screen and not saved.
+    only_matched:
+        Whether to only use matched-events. Set to True to compute parameters
+        for magnitude calculation for later use.
 
     Returns
     -------
@@ -502,9 +617,17 @@ def magnitude_inversion(
         _get_magnitude_attrib(event=_ev, attribute="mag",
                               magnitude_type=magnitude_type) 
         for _ev in callibration_events])
-    # TODO: map-plot of comparison events?
-    
-    mag_data = summarize_amplitudes(new_catalog)
+
+    if plot:
+        Catalog(callibration_events).plot(projection="local", resolution="h")
+
+    if only_matched:
+        matched_events = Catalog(
+            [ev for ev in new_catalog 
+            if ev.resource_id.id.split('/')[-1] in matched_ids])
+        mag_data = summarize_amplitudes(matched_events)
+    else:
+        mag_data = summarize_amplitudes(new_catalog)
 
     used_event_ids = list(set(mag_data.event_id))
     used_seed_ids = list(set(mag_data.seed_id))
@@ -518,14 +641,14 @@ def magnitude_inversion(
 
     ########################## Construct Y vector ##############################
     print("########## Constructing matrices ##########")
-    Y = np.zeros(total_length)
+    Y = np.zeros(total_length, dtype=np.float64)
     # Construct Y
     slantdist = (mag_data.epicentral_distance.to_numpy() ** 2 +
                  mag_data.depth.to_numpy() ** 2) ** 0.5
     slantdist = slantdist.astype(np.float32)
     # Fill top of Y with amplitude and geometric spreading terms
     # Amplitudes are in m
-    amplitudes = mag_data.amplitude.to_numpy().astype(np.float64)
+    amplitudes = mag_data.amplitude.to_numpy().astype(np.float32)
     Y[0:n_observations] = np.log10(amplitudes * 1000) + (
         geometric_parameter * np.log10(slantdist))
     # Fill remainder with weighted geonet magnitudes
@@ -534,7 +657,7 @@ def magnitude_inversion(
     ########################## Construct X matrix ##############################
 
     x_width = n_new_events + n_seed_ids + 1
-    X = np.zeros((total_length, x_width))
+    X = np.zeros((total_length, x_width), dtype=np.float64)
 
     # Fill with frequency * distance
     if frequency_dependent:
@@ -616,21 +739,49 @@ def magnitude_inversion(
     print("########## Building output catalog. ##########")
 
     callibrated_catalog = Catalog()
-    bar = ProgressBar(max_value=len(used_event_ids))
-    i = 0
-    for event_id, magnitude in zip(used_event_ids, new_magnitudes):
-        event = [ev for ev in new_catalog 
-                 if ev.resource_id.id.split('/')[-1] == event_id][0]
-        callibrated_catalog += insert_magnitude(
-            event=event, magnitude=magnitude, gamma=gamma, 
-            frequency_dependent=frequency_dependent,
-            station_corrections=station_corrections, 
-            geometric_parameter=geometric_parameter)
-        i += 1
-        bar.update(i)
-    bar.finish()
+
+    if only_matched:
+        # Calculate average magnitude from stations.
+        bar = ProgressBar(max_value=len(new_catalog))
+        for i, event in enumerate(new_catalog):
+            callibrated_catalog += insert_magnitude(
+                event=event, magnitude=None, gamma=gamma,
+                frequency_dependent=frequency_dependent,
+                station_corrections=station_corrections,
+                geometric_parameter=geometric_parameter)
+            bar.update(i)
+        bar.finish()
+    else:
+        # Use the inverted magnitudes.
+        bar = ProgressBar(max_value=len(used_event_ids))
+        i = 0
+        for event_id, magnitude in zip(used_event_ids, new_magnitudes):
+            event = [ev for ev in new_catalog 
+                    if ev.resource_id.id.split('/')[-1] == event_id][0]
+            callibrated_catalog += insert_magnitude(
+                event=event, magnitude=magnitude, gamma=gamma, 
+                frequency_dependent=frequency_dependent,
+                station_corrections=station_corrections, 
+                geometric_parameter=geometric_parameter)
+            i += 1
+            bar.update(i)
+        bar.finish()
 
     ####################### Make plots #########################################
+    
+    if plot:
+        # Add residuals to mag_data
+        res_col = res[0:n_observations]
+        mag_data["residual"] = res_col
+        # Plot of residuals for each observations
+        res_plot = residual_plot(residuals=res_col)
+        # Plot of residuals for inidivual callibration magnitudes
+        callibration_res_plot = residual_plot(
+            residuals=calibration_magnitude_residuals)
+        callibration_res_plot.suptitle("Callibration events only")
+
+        distance_decay_plot = decay_plot(mag_data, gamma, frequency_dependent)
+        plt.show()
 
 
     return  callibrated_catalog, gamma, station_corrections
