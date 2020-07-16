@@ -175,6 +175,7 @@ def _blank_map(lons, lats, color, projection="global",
         _CARTOPY_FEATURES, _CARTOPY_RESOLUTIONS, mean_longitude)
     import cartopy.feature as cfeature
     import matplotlib.pyplot as plt
+    from matplotlib.cm import get_cmap
     from matplotlib.colorbar import ColorbarBase
     from matplotlib.colors import Normalize
     from matplotlib.ticker import (
@@ -355,8 +356,9 @@ def _blank_map(lons, lats, color, projection="global",
             else:
                 locator = None
                 formatter = None
+        cmap = get_cmap(name=colormap)
         cb = ColorbarBase(
-            cm_ax, norm=norm, cmap=colormap, orientation='horizontal',
+            cm_ax, norm=norm, cmap=cmap, orientation='horizontal',
             ticks=locator, format=formatter)
         cb.set_label(color_label)
         # Compat with old matplotlib versions.
