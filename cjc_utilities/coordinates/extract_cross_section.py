@@ -10,6 +10,7 @@ from cjc_utilities.coordinates.coordinates import Location, Geographic
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
+
 def get_plane(origin, strike, dip, length=100, height=-50):
     """
     Get four corners of a plane around an origin.
@@ -34,6 +35,7 @@ def get_plane(origin, strike, dip, length=100, height=-50):
               Location(0, 0, 0, origin, strike, dip)]
     point_geographics = [point.to_geographic() for point in points]
     return point_geographics
+
 
 def plot_xyz(locations, plane=None):
     """
@@ -125,7 +127,7 @@ if __name__ == '__main__':
                 latitude=float(line[0]), longitude=float(line[1]),
                 depth=-1 * float(line[2])))
     origin = Geographic(latitude=-44.056691, longitude=168.723146,
-                        depth=-0.015) # Location of Whataroa valley
+                        depth=-0.015)  # Location of Whataroa valley
     strike = 57.26  # Rotation of Alpine Fault clockwise from North
     dip = 50.0  # Dip of Alpine Fault from horizontal.
     # Make a plane to plot on the figures

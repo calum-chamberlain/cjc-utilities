@@ -68,7 +68,8 @@ def _blank_map(lons, lats, color, projection="global",
                resolution='110m', continent_fill_color='0.8',
                water_fill_color='1.0', colormap=None, colorbar=None,
                title=None, colorbar_ticklabel_format=None,
-               color_label="Depth (km)", proj_kwargs=None,
+               color_label="Depth (km)", logarithmic_color=False,
+               proj_kwargs=None,
                figsize=(20, 20), pad=0.05, norm=None):
     """
     Plot a map for the region appropriate for the catalog, but do not plot the
@@ -177,7 +178,7 @@ def _blank_map(lons, lats, color, projection="global",
     import matplotlib.pyplot as plt
     from matplotlib.cm import get_cmap
     from matplotlib.colorbar import ColorbarBase
-    from matplotlib.colors import Normalize
+    from matplotlib.colors import Normalize, LogNorm
     from matplotlib.ticker import (
         FormatStrFormatter, Formatter, FuncFormatter, MaxNLocator)
 
@@ -331,7 +332,10 @@ def _blank_map(lons, lats, color, projection="global",
     #                          zorder=10, cmap=colormap,
     #                          transform=ccrs.Geodetic())
     if norm is None:
-        norm = Normalize(vmin=min(color), vmax=max(color))
+        if logarithmic_color:
+            norm = LogNorm(vmin=min(color), vmax=max(color))
+        else:
+            norm = Normalize(vmin=min(color), vmax=max(color))
 
     if title:
         plt.suptitle(title)
@@ -365,7 +369,7 @@ def _blank_map(lons, lats, color, projection="global",
         if hasattr(cb, "update_ticks"):
             cb.update_ticks()
 
-    return fig, map_ax
+    return fig, map_ax, cm_ax
 
 
 class AnimatedCatalog(Catalog):
@@ -446,7 +450,7 @@ class AnimatedCatalog(Catalog):
         max_size_ = max(mags) + 1
 
         if fig is None:
-            fig, map_ax = _blank_map(
+            fig, map_ax, _ = _blank_map(
                 lons, lats, colors, projection=projection,
                 resolution=resolution,
                 continent_fill_color=continent_fill_color,
