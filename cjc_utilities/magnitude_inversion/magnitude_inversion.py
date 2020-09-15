@@ -540,6 +540,7 @@ def magnitude_inversion(
     frequency: float = 5.0,
     plot: bool = False,
     only_matched: bool = False,
+    in_place: bool = False,
 ) -> Tuple[Catalog, float, dict]:
     """
     Compute magnitude scale for a given catalogue compared to another.
@@ -585,6 +586,8 @@ def magnitude_inversion(
     only_matched:
         Whether to only use matched-events. Set to True to compute parameters
         for magnitude calculation for later use.
+    in_place:
+        Update magnitudes in-place in catalog (True), or return a new catalog.
 
     Returns
     -------
@@ -738,13 +741,16 @@ def magnitude_inversion(
     ########################## Add in magnitudes ###############################
     print("########## Building output catalog. ##########")
 
-    callibrated_catalog = Catalog()
+    if in_place:
+        callibrated_events = new_catalog.events
+    else:
+        callibrated_events = [None for _ in range(len(new_catalog))]
 
     if only_matched:
         # Calculate average magnitude from stations.
         bar = ProgressBar(max_value=len(new_catalog))
         for i, event in enumerate(new_catalog):
-            callibrated_catalog += insert_magnitude(
+            callibrated_events[i] = insert_magnitude(
                 event=event, magnitude=None, gamma=gamma,
                 frequency_dependent=frequency_dependent,
                 station_corrections=station_corrections,
@@ -758,7 +764,7 @@ def magnitude_inversion(
         for event_id, magnitude in zip(used_event_ids, new_magnitudes):
             event = [ev for ev in new_catalog 
                     if ev.resource_id.id.split('/')[-1] == event_id][0]
-            callibrated_catalog += insert_magnitude(
+            callibrated_events[i] = insert_magnitude(
                 event=event, magnitude=magnitude, gamma=gamma, 
                 frequency_dependent=frequency_dependent,
                 station_corrections=station_corrections, 
@@ -766,6 +772,8 @@ def magnitude_inversion(
             i += 1
             bar.update(i)
         bar.finish()
+
+    callibrated_catalog = Catalog(callibrated_events)
 
     ####################### Make plots #########################################
     
