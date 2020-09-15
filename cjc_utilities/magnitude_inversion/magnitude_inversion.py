@@ -455,8 +455,8 @@ def residual_plot(residuals: np.array) -> plt.Figure:
     ax.set_xlabel("Magnitude residual")
     ax.set_ylabel("Count")
     
-    sigma = res.std()
-    mu = res.mean()
+    sigma = residuals.std()
+    mu = residuals.mean()
 
     # Add a best fit normal distribution
     y = ((1 / (np.sqrt(2 * np.pi) * sigma)) * np.exp(-0.5 * (1 / sigma * (bins - mu)) ** 2))
