@@ -368,8 +368,9 @@ def _blank_map(lons, lats, color, projection="global",
         # Compat with old matplotlib versions.
         if hasattr(cb, "update_ticks"):
             cb.update_ticks()
-
-    return fig, map_ax, cm_ax
+    if show_colorbar:
+        return fig, map_ax, cm_ax
+    return fig, map_ax
 
 
 class AnimatedCatalog(Catalog):
