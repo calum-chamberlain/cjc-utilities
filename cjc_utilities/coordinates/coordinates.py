@@ -15,8 +15,8 @@ class Location(object):
     """
     Location in x, y, z in some co-ordinate system.
     """
-    def __init__(self, x, y, z, origin, strike, dip, 
-                 time=None, magnitude=None):
+    def __init__(self, x, y, z, origin, strike, dip,
+                 event_id=None, time=None, magnitude=None):
         self.x = x
         self.y = y
         self.z = z
@@ -27,6 +27,7 @@ class Location(object):
             raise IOError("time is not a datetime object.")
         self.time = time
         self.magnitude = magnitude
+        self.event_id = event_id
 
     def __str__(self):
         return ("Location: x: {0} y: {1} z: {2}\n\tOrigin: "
@@ -73,7 +74,8 @@ class Location(object):
         geog = Geographic(latitude=round(latitude, 6),
                           longitude=round(longitude, 6),
                           depth=round(depth, 6), time=self.time,
-                          magnitude=self.magnitude)
+                          magnitude=self.magnitude, 
+                          event_id=self.event_id)
         return geog
 
 
@@ -81,7 +83,8 @@ class Geographic(object):
     """
     Geographic position in lat, long and depth as deg, deg, km (+ve down)
     """
-    def __init__(self, latitude, longitude, depth, time=None, magnitude=None):
+    def __init__(self, latitude, longitude, depth, time=None, 
+                 magnitude=None, event_id=None):
         self.latitude = latitude
         self.longitude = longitude
         self.depth = depth
@@ -89,6 +92,7 @@ class Geographic(object):
             raise IOError("time is not a datetime object.")
         self.time = time
         self.magnitude = magnitude
+        self.event_id = event_id
 
     def __str__(self):
         return "Geographic: Lat {0}, Long {1}, Depth (km) {2}".format(
@@ -142,7 +146,7 @@ class Geographic(object):
         z1 = (-x1 * math.sin(d)) + (z * math.cos(d))
         return Location(round(x2, 6), round(y1, 6), round(z1, 6),
                         origin, strike, dip, time=self.time, 
-                        magnitude=self.magnitude)
+                        magnitude=self.magnitude, event_id=self.event_id)
 
 
 if __name__ == '__main__':
