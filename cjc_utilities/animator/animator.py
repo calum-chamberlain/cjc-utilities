@@ -369,7 +369,7 @@ def _blank_map(lons, lats, color, projection="global",
         if hasattr(cb, "update_ticks"):
             cb.update_ticks()
     if show_colorbar:
-        return fig, map_ax, cm_ax
+        return fig, map_ax, cm_ax, cb
     return fig, map_ax
 
 

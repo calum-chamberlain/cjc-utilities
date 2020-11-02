@@ -412,7 +412,7 @@ def insert_magnitude(
         station_mag = (
                 np.log10(amp * 1000) + 
                 geometric_parameter * np.log10(hyp_dist) + 
-                (gamma_freq * 0.4343 * amp * 1000) + 
+                (gamma_freq * 0.4343 * hyp_dist) +  # This was wrong!
                 station_corrections[seed_id])
 
         station_magnitude = StationMagnitude(
@@ -720,6 +720,10 @@ def magnitude_inversion(
     ####################### Get station corrections ############################
     # These are just the average adjustments
     
+    # TODO: The station corrections seem wrong: 
+    #   the magnitudes calculated using them are not the same as the 
+    #   inverted magnitudes.
+
     best_mags = np.zeros(n_observations)
 
     for j, event_id in enumerate(used_event_ids):
