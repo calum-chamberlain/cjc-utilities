@@ -15,7 +15,7 @@ class Location(object):
     """
     Location in x, y, z in some co-ordinate system.
     """
-    def __init__(self, x, y, z, origin, strike, dip, 
+    def __init__(self, x, y, z, origin, strike, dip,
                  time=None, magnitude=None, event_id=None):
         self.x = x
         self.y = y
@@ -28,11 +28,12 @@ class Location(object):
             raise IOError("time is not a datetime object.")
         self.time = time
         self.magnitude = magnitude
+        self.event_id = event_id
 
     def __str__(self):
         return ("Location: x: {0} y: {1} z: {2}\n\tOrigin: "
                 "{3} Strike: {4} Dip: {5}".format(
-                    self.x, self.y, self.z, self.origin, self.strike, 
+                    self.x, self.y, self.z, self.origin, self.strike,
                     self.dip))
 
     def __repr__(self):
@@ -45,7 +46,7 @@ class Location(object):
         return True
 
     def __ne__(self, other):
-        return not self.__eq__(other) 
+        return not self.__eq__(other)
 
     def to_geographic(self):
         """
@@ -60,12 +61,12 @@ class Location(object):
         z = (-self.x * math.sin(-d)) + (self.z * math.cos(-d))
         # Rotate back by strike into North, East, Down reference
         x = (x1 * math.cos(s)) + (self.y * math.sin(s))
-        y = (-x1 * math.sin(s)) + (self.y * math.cos(s)) 
+        y = (-x1 * math.sin(s)) + (self.y * math.cos(s))
         # Convert to geographic co-ordinates
         latitude = y / EARTHRADIUS # Degrees north of origin in radians
         latitude += math.radians(self.origin.latitude)
         latitude = math.degrees(latitude)
-        mean_lat = math.radians((latitude + self.origin.latitude) / 2) 
+        mean_lat = math.radians((latitude + self.origin.latitude) / 2)
         # is this calculation better done in radians?
         longitude = x / (math.cos(mean_lat) * EARTHRADIUS)
         longitude += math.radians(self.origin.longitude)
@@ -92,11 +93,12 @@ class Geographic(object):
             raise IOError("time is not a datetime object.")
         self.time = time
         self.magnitude = magnitude
+        self.event_id = event_id
 
     def __str__(self):
         return "Geographic: Lat {0}, Long {1}, Depth (km) {2}".format(
             self.latitude, self.longitude, self.depth)
-    
+
     def __repr__(self):
         return self.__str__()
 
@@ -107,7 +109,7 @@ class Geographic(object):
         return True
 
     def __ne__(self, other):
-        return not self.__eq__(other) 
+        return not self.__eq__(other)
 
     def to_xyz(self, origin, strike, dip):
         """
@@ -135,7 +137,7 @@ class Geographic(object):
         d = math.radians(90 - dip)
         # Rotate through strike (clockwise from North)
         x1 = (x * math.cos(-s)) + (y * math.sin(-s))
-        y1 = (-x * math.sin(-s)) + (y * math.cos(-s)) 
+        y1 = (-x * math.sin(-s)) + (y * math.cos(-s))
         """
         x1 is horizontal distance perpendicular to strike,
         y1 is horizontal distance along strike - this needs no further rotation.
@@ -144,7 +146,7 @@ class Geographic(object):
         x2 = (x1 * math.cos(d)) + (z * math.sin(d))
         z1 = (-x1 * math.sin(d)) + (z * math.cos(d))
         return Location(round(x2, 6), round(y1, 6), round(z1, 6),
-                        origin, strike, dip, time=self.time, 
+                        origin, strike, dip, time=self.time,
                         magnitude=self.magnitude, event_id=self.event_id)
 
 

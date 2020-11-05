@@ -413,7 +413,7 @@ def insert_magnitude(
         station_mag = (
                 np.log10(amp * 1000) + 
                 geometric_parameter * np.log10(hyp_dist) + 
-                (gamma_freq * 0.4343 * amp * 1000) + 
+                (gamma_freq * 0.4343 * hyp_dist) +  # This was wrong!
                 station_corrections[seed_id])
 
         station_magnitude = StationMagnitude(
@@ -456,8 +456,8 @@ def residual_plot(residuals: np.array) -> plt.Figure:
     ax.set_xlabel("Magnitude residual")
     ax.set_ylabel("Count")
     
-    sigma = res.std()
-    mu = res.mean()
+    sigma = residuals.std()
+    mu = residuals.mean()
 
     # Add a best fit normal distribution
     y = ((1 / (np.sqrt(2 * np.pi) * sigma)) * np.exp(-0.5 * (1 / sigma * (bins - mu)) ** 2))
@@ -541,6 +541,7 @@ def magnitude_inversion(
     frequency: float = 5.0,
     plot: bool = False,
     only_matched: bool = False,
+    in_place: bool = False,
 ) -> Tuple[Catalog, float, dict]:
     """
     Compute magnitude scale for a given catalogue compared to another.
@@ -586,6 +587,8 @@ def magnitude_inversion(
     only_matched:
         Whether to only use matched-events. Set to True to compute parameters
         for magnitude calculation for later use.
+    in_place:
+        Update magnitudes in-place in catalog (True), or return a new catalog.
 
     Returns
     -------
@@ -718,6 +721,10 @@ def magnitude_inversion(
     ####################### Get station corrections ############################
     # These are just the average adjustments
     
+    # TODO: The station corrections seem wrong: 
+    #   the magnitudes calculated using them are not the same as the 
+    #   inverted magnitudes.
+
     best_mags = np.zeros(n_observations)
 
     for j, event_id in enumerate(used_event_ids):
@@ -739,13 +746,16 @@ def magnitude_inversion(
     ########################## Add in magnitudes ###############################
     print("########## Building output catalog. ##########")
 
-    callibrated_catalog = Catalog()
+    if in_place:
+        callibrated_events = new_catalog.events
+    else:
+        callibrated_events = [None for _ in range(len(new_catalog))]
 
     if only_matched:
         # Calculate average magnitude from stations.
         bar = ProgressBar(max_value=len(new_catalog))
         for i, event in enumerate(new_catalog):
-            callibrated_catalog += insert_magnitude(
+            callibrated_events[i] = insert_magnitude(
                 event=event, magnitude=None, gamma=gamma,
                 frequency_dependent=frequency_dependent,
                 station_corrections=station_corrections,
@@ -759,7 +769,7 @@ def magnitude_inversion(
         for event_id, magnitude in zip(used_event_ids, new_magnitudes):
             event = [ev for ev in new_catalog 
                     if ev.resource_id.id.split('/')[-1] == event_id][0]
-            callibrated_catalog += insert_magnitude(
+            callibrated_events[i] = insert_magnitude(
                 event=event, magnitude=magnitude, gamma=gamma, 
                 frequency_dependent=frequency_dependent,
                 station_corrections=station_corrections, 
@@ -767,6 +777,8 @@ def magnitude_inversion(
             i += 1
             bar.update(i)
         bar.finish()
+
+    callibrated_catalog = Catalog(callibrated_events)
 
     ####################### Make plots #########################################
     
