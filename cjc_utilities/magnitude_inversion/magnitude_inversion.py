@@ -359,6 +359,7 @@ def get_comparison_catalog(
         comparison_cat = Catalog()
         _starttime, _endtime = starttime, starttime + (30 * 34 * 3600)
         while _endtime <= endtime:
+            print(f"Getting events between {_starttime} and {_endtime}")
             comparison_cat += client.get_events(
                 starttime=_starttime, endtime=_endtime, minlatitude=min_lat, 
                 maxlatitude=max_lat, minlongitude=min_lon, maxlongitude=max_lon)
