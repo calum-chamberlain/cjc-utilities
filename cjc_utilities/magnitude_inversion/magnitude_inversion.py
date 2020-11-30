@@ -381,12 +381,14 @@ def insert_magnitude(
     frequency_dependent: bool,
     station_corrections: dict, 
     geometric_parameter: float,
+    use_mean_correction: bool = False,
 ) -> Event:
     """
     """
     event_out = event.copy()
     ori = event_out.preferred_origin() or event_out.origins[-1]
     mag_type = "ML"
+    mean_sta_corr = np.mean([corr for corr in station_corrections.values()])
 
     station_magnitudes = []
     for amplitude in event_out.amplitudes:
@@ -409,11 +411,18 @@ def insert_magnitude(
         seed_id = amplitude.pick_id.get_referred_object(
             ).waveform_id.get_seed_string()
 
+        sta_corr = station_corrections.get(seed_id, None)
+        if sta_corr is None and not use_mean_correction:
+            print(f"No station correction for {seed_id}, skipping")
+            continue
+        elif sta_corr is None:
+            sta_corr = mean_sta_corr
+            print(f"No station correction for {seed_id}, using mean: {sta_corr}")
         station_mag = (
                 np.log10(amp * 1000) + 
                 geometric_parameter * np.log10(hyp_dist) + 
                 (gamma_freq * 0.4343 * hyp_dist) +  # This was wrong!
-                station_corrections[seed_id])
+                sta_corr)
 
         station_magnitude = StationMagnitude(
             origin_id=ori.resource_id, mag=station_mag, 
