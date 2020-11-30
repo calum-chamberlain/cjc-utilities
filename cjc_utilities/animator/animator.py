@@ -109,8 +109,8 @@ def _blank_map(lons, lats, color, projection="global",
             * ``"50m"``
             * ``"10m"``
 
-        Defaults to ``"110m"``. For compatibility, you may also specify any of
-        the Basemap resolutions defined in :func:`plot_basemap`.
+        Defaults to ``"110m"``. If you specify another resolutoin, 
+        GSHHG will be used
     :type continent_fill_color: Valid matplotlib color, optional
     :param continent_fill_color:  Color of the continents. Defaults to
         ``"0.9"`` which is a light gray.
@@ -296,30 +296,40 @@ def _blank_map(lons, lats, color, projection="global",
         map_ax.set_global()
 
     # Pick features at specified resolution.
-    resolution = _CARTOPY_RESOLUTIONS[resolution]
-    try:
-        borders, land, ocean = _CARTOPY_FEATURES[resolution]
-    except KeyError:
-        borders = cfeature.NaturalEarthFeature(cfeature.BORDERS.category,
-                                               cfeature.BORDERS.name,
-                                               resolution,
-                                               edgecolor='none',
-                                               facecolor='none')
-        land = cfeature.NaturalEarthFeature(cfeature.LAND.category,
-                                            cfeature.LAND.name, resolution,
-                                            edgecolor='face', facecolor='none')
-        ocean = cfeature.NaturalEarthFeature(cfeature.OCEAN.category,
-                                             cfeature.OCEAN.name, resolution,
-                                             edgecolor='face',
-                                             facecolor='none')
-        _CARTOPY_FEATURES[resolution] = (borders, land, ocean)
+    if resolution in ("10m", "50m", "110m"):
+        # Use NaturalEarthFeature interface
+        resolution = _CARTOPY_RESOLUTIONS[resolution]
+        try:
+            borders, land, ocean = _CARTOPY_FEATURES[resolution]
+        except KeyError:
+            borders = cfeature.NaturalEarthFeature(cfeature.BORDERS.category,
+                                                cfeature.BORDERS.name,
+                                                resolution,
+                                                edgecolor='none',
+                                                facecolor='none')
+            land = cfeature.NaturalEarthFeature(cfeature.LAND.category,
+                                                cfeature.LAND.name, resolution,
+                                                edgecolor='face', facecolor='none')
+            ocean = cfeature.NaturalEarthFeature(cfeature.OCEAN.category,
+                                                cfeature.OCEAN.name, resolution,
+                                                edgecolor='face',
+                                                facecolor='none')
+            _CARTOPY_FEATURES[resolution] = (borders, land, ocean)
 
-    # Draw coast lines, country boundaries, fill continents.
-    map_ax.set_facecolor(water_fill_color)
-    map_ax.add_feature(ocean, facecolor=water_fill_color)
-    map_ax.add_feature(land, facecolor=continent_fill_color)
-    map_ax.add_feature(borders, edgecolor='0.75')
-    map_ax.coastlines(resolution=resolution, color='0.4')
+        # Draw coast lines, country boundaries, fill continents.
+        map_ax.set_facecolor(water_fill_color)
+        map_ax.add_feature(ocean, facecolor=water_fill_color)
+        map_ax.add_feature(land, facecolor=continent_fill_color)
+        map_ax.add_feature(borders, edgecolor='0.75')
+        map_ax.coastlines(resolution=resolution, color='0.4')
+    else:
+        # Use the GSHHG interface
+        coast = cfeature.GSHHSFeature(
+            scale=resolution, levels=[1], facecolor=continent_fill_color, 
+            edgecolor="0.4")
+        map_ax.set_facecolor(water_fill_color)
+        map_ax.add_feature(coast)
+        
 
     # Draw grid lines - TODO: draw_labels=True doesn't work yet.
     if projection == 'local':
