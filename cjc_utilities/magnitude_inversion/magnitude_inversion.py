@@ -698,9 +698,9 @@ def magnitude_inversion(
     condition_inv = linalg.lstsq(u, linalg.lstsq(l, _id)[0])[0] 
     # This is the inverse for the variances
    
-    assert(np.allclose(condition_inv @ conditionX, _id, atol=1e-5))
+    assert(np.allclose(condition_inv @ conditionX, _id, atol=1e-3))
     assert(np.allclose(
-        linalg.lstsq(u, linalg.lstsq(l, conditionX)[0])[0], _id, atol=1e-5))
+        linalg.lstsq(u, linalg.lstsq(l, conditionX)[0])[0], _id, atol=1e-3))
 
     print("########## Extracting parameters ##########")
     p_std_multiplier = np.sqrt(condition_inv[n_new_events + 1,
@@ -720,11 +720,6 @@ def magnitude_inversion(
 
     ####################### Get station corrections ############################
     # These are just the average adjustments
-    
-    # TODO: The station corrections seem wrong: 
-    #   the magnitudes calculated using them are not the same as the 
-    #   inverted magnitudes.
-
     best_mags = np.zeros(n_observations)
 
     for j, event_id in enumerate(used_event_ids):
@@ -768,9 +763,9 @@ def magnitude_inversion(
         i = 0
         for event_id, magnitude in zip(used_event_ids, new_magnitudes):
             event = [ev for ev in new_catalog 
-                    if ev.resource_id.id.split('/')[-1] == event_id][0]
+                     if ev.resource_id.id.split('/')[-1] == event_id][0]
             callibrated_events[i] = insert_magnitude(
-                event=event, magnitude=magnitude, gamma=gamma, 
+                event=event.copy(), magnitude=magnitude, gamma=gamma,
                 frequency_dependent=frequency_dependent,
                 station_corrections=station_corrections, 
                 geometric_parameter=geometric_parameter)
