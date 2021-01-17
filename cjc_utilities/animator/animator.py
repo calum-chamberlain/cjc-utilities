@@ -69,8 +69,8 @@ def _blank_map(lons, lats, color, projection="global",
                water_fill_color='1.0', colormap=None, colorbar=None,
                title=None, colorbar_ticklabel_format=None,
                color_label="Depth (km)", logarithmic_color=False,
-               proj_kwargs=None,
-               figsize=(20, 20), pad=0.05, norm=None):
+               proj_kwargs=None, figsize=(20, 20), pad=0.05, norm=None,
+               fig=None, map_ax=None, cm_ax=None):
     """
     Plot a map for the region appropriate for the catalog, but do not plot the
     events themselves.
@@ -109,8 +109,8 @@ def _blank_map(lons, lats, color, projection="global",
             * ``"50m"``
             * ``"10m"``
 
-        Defaults to ``"110m"``. For compatibility, you may also specify any of
-        the Basemap resolutions defined in :func:`plot_basemap`.
+        Defaults to ``"110m"``. If you specify another resolutoin, 
+        GSHHG will be used
     :type continent_fill_color: Valid matplotlib color, optional
     :param continent_fill_color:  Color of the continents. Defaults to
         ``"0.9"`` which is a light gray.
@@ -188,7 +188,8 @@ def _blank_map(lons, lats, color, projection="global",
     else:
         datetimeplot = False
 
-    fig = plt.figure(figsize=figsize)
+    if fig is None:
+        fig = plt.figure(figsize=figsize)
 
     # The colorbar should only be plotted if more then one event is
     # present.
@@ -277,16 +278,30 @@ def _blank_map(lons, lats, color, projection="global",
 
     # TODO: Add option to show cumulative plot
     if show_colorbar:
-        map_ax = fig.add_axes([ax_x0, 0.13, ax_width, 0.77], projection=proj)
-        cm_ax = fig.add_axes([ax_x0, 0.05, ax_width, 0.05])
+        if map_ax is None:
+            map_ax = fig.add_axes([ax_x0, 0.13, ax_width, 0.77], 
+                                  projection=proj)
+        elif not hasattr(map_ax, "projection") or map_ax.projection != proj:
+            geom = map_ax.get_geometry()
+            # Remove and rebuild
+            map_ax.remove()
+            map_ax = fig.add_subplot(*geom, projection=proj)
+        if cm_ax is None:
+            cm_ax = fig.add_axes([ax_x0, 0.05, ax_width, 0.05])
         plt.sca(map_ax)
     else:
         ax_y0, ax_height = 0.05, 0.85
         if projection == "local":
             ax_y0 += 0.05
             ax_height -= 0.05
-        map_ax = fig.add_axes([ax_x0, ax_y0, ax_width, ax_height],
-                              projection=proj)
+        if map_ax is None:
+            map_ax = fig.add_axes([ax_x0, ax_y0, ax_width, ax_height],
+                                  projection=proj)
+        elif not hasattr(map_ax, "projection") or map_ax.projection != proj:
+            geom = map_ax.get_geometry()
+            # Remove and rebuild
+            map_ax.remove()
+            map_ax = fig.add_subplot(*geom, projection=proj)
 
     if projection == 'local':
         x0, y0 = proj.transform_point(lon_0, lat_0, proj.as_geodetic())
@@ -296,30 +311,40 @@ def _blank_map(lons, lats, color, projection="global",
         map_ax.set_global()
 
     # Pick features at specified resolution.
-    resolution = _CARTOPY_RESOLUTIONS[resolution]
-    try:
-        borders, land, ocean = _CARTOPY_FEATURES[resolution]
-    except KeyError:
-        borders = cfeature.NaturalEarthFeature(cfeature.BORDERS.category,
-                                               cfeature.BORDERS.name,
-                                               resolution,
-                                               edgecolor='none',
-                                               facecolor='none')
-        land = cfeature.NaturalEarthFeature(cfeature.LAND.category,
-                                            cfeature.LAND.name, resolution,
-                                            edgecolor='face', facecolor='none')
-        ocean = cfeature.NaturalEarthFeature(cfeature.OCEAN.category,
-                                             cfeature.OCEAN.name, resolution,
-                                             edgecolor='face',
-                                             facecolor='none')
-        _CARTOPY_FEATURES[resolution] = (borders, land, ocean)
+    if resolution in ("10m", "50m", "110m"):
+        # Use NaturalEarthFeature interface
+        resolution = _CARTOPY_RESOLUTIONS[resolution]
+        try:
+            borders, land, ocean = _CARTOPY_FEATURES[resolution]
+        except KeyError:
+            borders = cfeature.NaturalEarthFeature(cfeature.BORDERS.category,
+                                                cfeature.BORDERS.name,
+                                                resolution,
+                                                edgecolor='none',
+                                                facecolor='none')
+            land = cfeature.NaturalEarthFeature(cfeature.LAND.category,
+                                                cfeature.LAND.name, resolution,
+                                                edgecolor='face', facecolor='none')
+            ocean = cfeature.NaturalEarthFeature(cfeature.OCEAN.category,
+                                                cfeature.OCEAN.name, resolution,
+                                                edgecolor='face',
+                                                facecolor='none')
+            _CARTOPY_FEATURES[resolution] = (borders, land, ocean)
 
-    # Draw coast lines, country boundaries, fill continents.
-    map_ax.set_facecolor(water_fill_color)
-    map_ax.add_feature(ocean, facecolor=water_fill_color)
-    map_ax.add_feature(land, facecolor=continent_fill_color)
-    map_ax.add_feature(borders, edgecolor='0.75')
-    map_ax.coastlines(resolution=resolution, color='0.4')
+        # Draw coast lines, country boundaries, fill continents.
+        map_ax.set_facecolor(water_fill_color)
+        map_ax.add_feature(ocean, facecolor=water_fill_color)
+        map_ax.add_feature(land, facecolor=continent_fill_color)
+        map_ax.add_feature(borders, edgecolor='0.75')
+        map_ax.coastlines(resolution=resolution, color='0.4')
+    else:
+        # Use the GSHHG interface
+        coast = cfeature.GSHHSFeature(
+            scale=resolution, levels=[1], facecolor=continent_fill_color, 
+            edgecolor="0.4")
+        map_ax.set_facecolor(water_fill_color)
+        map_ax.add_feature(coast)
+        
 
     # Draw grid lines - TODO: draw_labels=True doesn't work yet.
     if projection == 'local':
