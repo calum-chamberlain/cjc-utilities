@@ -476,7 +476,7 @@ class AnimatedCatalog(Catalog):
         max_size_ = max(mags) + 1
 
         if fig is None:
-            fig, map_ax, _ = _blank_map(
+            fig, map_ax, _, _ = _blank_map(
                 lons, lats, colors, projection=projection,
                 resolution=resolution,
                 continent_fill_color=continent_fill_color,
@@ -489,8 +489,8 @@ class AnimatedCatalog(Catalog):
         scatters = []
         for _, alpha in zip(catalog_deck, alphas):
             scatters.append(map_ax.scatter(
-                [None], [None], marker="o", s=[], c=[], zorder=10,
-                cmap=colormap, transform=ccrs.Geodetic(), alpha=alpha))
+                [], [], marker="o", s=[], c=[], zorder=10,
+                cmap=colormap, transform=ccrs.PlateCarree(), alpha=alpha))
         frame_time = catalog_start - interval
         timestamp = map_ax.text(
             0.05, 0.05, frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"),
@@ -537,7 +537,7 @@ if __name__ == '__main__':
 
     client = Client("GEONET")
     cat = client.get_events(
-        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 5, 20),
+        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 1, 10),
         maxdepth=120, maxlatitude=-32., minlatitude=-49, minlongitude=164.2,
         maxlongitude=179.)
     print("Downloaded catalog of {0} events".format(len(cat)))
