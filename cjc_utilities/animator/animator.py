@@ -12,7 +12,10 @@ import numpy as np
 from future.utils import native_str
 import datetime
 import warnings
+
 from matplotlib.dates import AutoDateFormatter, AutoDateLocator, date2num
+from matplotlib.cm import get_cmap
+
 import cartopy.crs as ccrs
 try:
     from progressbar import ProgressBar
@@ -465,6 +468,8 @@ class AnimatedCatalog(Catalog):
         # Create the colormap for date based plotting.
         if colormap is None:
             colormap = obspy_sequential
+        elif isinstance(colormap, str):
+            colormap = get_cmap(colormap)
         norm = Normalize(vmin=min(colors), vmax=max(colors))
 
         if title is None:
@@ -520,11 +525,16 @@ class AnimatedCatalog(Catalog):
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
             if HAS_PROGRESS:
                 bar.update(frame)
-            return scatters
+            else:
+                print(f"\r{frame}")
+            artists = [timestamp, *scatters]
+            return artists
 
         anim = FuncAnimation(
             fig, update, frames=frames, interval=interval, repeat=False,
             blit=True)
+        if HAS_PROGRESS:
+            bar.finish()
 
         if show:
             plt.show()
