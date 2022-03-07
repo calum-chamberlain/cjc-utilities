@@ -14,5 +14,7 @@ setup(
         'cjc_utilities.plot_event', 'cjc_utilities.io', 
         'cjc_utilities.magnitude_inversion'],
     zip_safe=False,
-    scripts=["cjc_utilities/plot_event/plot_event.py", "cjc_utilities/picker/adjust_picks.py"]
+    scripts=["cjc_utilities/plot_event/plot_event.py",
+             "cjc_utilities/picker/adjust_picks.py",
+             "cjc_utilities/picker/seismic_picker.py"]
 )
