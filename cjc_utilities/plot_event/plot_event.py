@@ -6,6 +6,8 @@ Calum Chamberlain
 
 import numpy as np
 
+from cjc_utilities.get_data.get_data import get_event_data
+
 
 def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
                            all_channels=False, filt=None, ignore_rotated=True,
@@ -21,44 +23,9 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
     :type all_channels: bool
     :param all_channels: Whether to download all channels from that sensor.
     """
-    from obspy import Stream
-    from obspy.clients.fdsn.client import FDSNNoDataException, FDSNException
-
-    try:
-        origin_time = event.preferred_origin().time or event.origins[0].time
-    except AttributeError:
-        # If there isn't an origin time, use the start of the stream
-        origin_time = min([pick.time for pick in event.picks])
-    t1 = origin_time - length / 10
-    t2 = t1 + length
-    bulk = []
-    for pick in event.picks:
-        if all_channels and pick.waveform_id.channel_code:
-            channel = "{0}?".format(pick.waveform_id.channel_code[0:2])
-        else:
-            channel = pick.waveform_id.channel_code or "*"
-        chan_info = (pick.waveform_id.network_code or "*", 
-                     pick.waveform_id.station_code or "*",
-                     pick.waveform_id.location_code or "*", channel,
-                     t1, t2)
-        if ignore_rotated and channel[-1] in ["R", "T"]:
-            continue
-        if chan_info not in bulk:
-            bulk.append(chan_info)
-    try:
-        st = client.get_waveforms_bulk(bulk)
-    except (FDSNNoDataException, FDSNException) as e:
-        print("No data exception - trying individual channels")
-        st = Stream()
-        for chan_info in bulk:
-            try:
-                st += client.get_waveforms(
-                    network=chan_info[0], station=chan_info[1],
-                    location=chan_info[2], channel=chan_info[3],
-                    starttime=chan_info[4], endtime=chan_info[5])
-                print("Downloaded for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
-            except FDSNNoDataException:
-                print("No data for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
+    event, st = get_event_data(
+        client=client, event=event, length=length, all_channels=all_channels,
+        ignore_rotated=ignore_rotated)
     if filt:
         st.detrend().filter('bandpass', freqmin=filt[0], freqmax=filt[1])
     if return_stream:
