@@ -13,7 +13,7 @@ from obspy.core.event import Pick, Event, Catalog
 from obspy.clients.fdsn import Client
 
 from matplotlib.lines import Line2D
-from matplotlib.pyplot import Figure
+from matplotlib.pyplot import Figure, Axes
 
 
 # GLOBALS for setting what keys correspond to.
@@ -35,7 +35,7 @@ POLARITY_KEYS = {key for key, value in KEY_MAPPING.items()
 TIME_KEYS = {key for key, value in KEY_MAPPING.items()
              if isinstance(value, Number)}
 
-COLORS = {"P": "red", "S": "yellow"}
+COLORS = {"P": "red", "S": "blue"}
 
 
 def pick_polarity(
@@ -44,9 +44,14 @@ def pick_polarity(
     pre_pick: float,
     post_pick: float,
     fig: Figure = None,
+    ax: Axes = None,
+    axlowcut: Axes = None,
+    axhighcut: Axes = None,
+    resetax: Axes = None,
 ):
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
+    from matplotlib.widgets import Slider, Button
     from datetime import timezone
 
     utc = timezone.utc
@@ -54,7 +59,7 @@ def pick_polarity(
     if fig is None:
         fig, ax = plt.subplots(figsize=(12, 8))
     else:
-        ax = fig.gca()
+        ax = ax or fig.gca()
         ax.clear()  # Remove the old plot
 
     trace = trace.slice(pick.time - pre_pick, pick.time + post_pick)
@@ -62,7 +67,11 @@ def pick_polarity(
     delta = trace.stats.delta
     phase_type = pick.phase_hint[0]
 
-    ax.plot(trace.times(), trace.data)
+    #seismo_line = ax.plot(trace.times(), trace.data)
+    seismo_line = ax.add_line(
+        Line2D(xdata=trace.times(), ydata=trace.data))
+    ax.set_ylim((trace.data.min(), trace.data.max()))
+    ax.set_xlim((trace.times().min(), trace.times().max()))
 
     pick_time = pick.time - starttime
     line = ax.add_line(
@@ -75,11 +84,46 @@ def pick_polarity(
     ax.set_xlabel(f"Seconds from {trace.stats.starttime}")
     pol_text = ax.text(0.1, 0.9, f"Polarity: {pick.polarity}", transform=ax.transAxes)
 
+    # Add sliders
+    if axlowcut is None:
+        fig.subplots_adjust(bottom=0.25)
+
+    if axlowcut:
+        axlowcut.clear()
+    else:
+        axlowcut = fig.add_axes([0.25, 0.15, 0.65, 0.03])
+    low_slider = Slider(
+        ax=axlowcut,
+        label='Lowcut [Hz]',
+        valmin=0.0,
+        valstep=0.5,
+        valmax=trace.stats.sampling_rate / 2,
+        valinit=0.0,
+    )
+    if axhighcut:
+        axhighcut.clear()
+    else:
+        axhighcut = fig.add_axes([0.25, 0.1, 0.65, 0.03])
+    high_slider = Slider(
+        ax=axhighcut,
+        label='Highcut [Hz]',
+        valmin=0.0,
+        valstep=0.5,
+        valmax=trace.stats.sampling_rate / 2,
+        valinit=trace.stats.sampling_rate / 2,
+    )
+    # Add "reset" Button
+    if resetax:
+        resetax.clear()
+    else:
+        resetax = fig.add_axes([0.5, 0.025, 0.09, 0.04])
+    reset_button = Button(resetax, "Reset", hovercolor='0.975')
+
     # Trackers
     fuckup, _quit, polarity_picked, time_adjusted, delete = False, False, False, 0, False
 
     def updown(event):
-        nonlocal fuckup, _quit, polarity_picked, time_adjusted, line, starttime, delta, pol_text, delete
+        nonlocal fuckup, _quit, polarity_picked, time_adjusted, line, starttime, delta, pol_text, delete, low_slider
         # Set polarity
         if event.key in POLARITY_KEYS:
             pick.polarity = KEY_MAPPING.get(event.key)
@@ -98,6 +142,8 @@ def pick_polarity(
             line.set_data([pick_time, pick_time], list(line.axes.get_ylim()))
             line.axes.draw_artist(line)
             line.figure.canvas.draw()
+        elif event.key in ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']:
+            low_slider.set_val(float(event.key))
         # Go to next event
         elif event.key == INVERSE_KEY_MAPPING["next"]:
             fig.canvas.stop_event_loop()
@@ -123,6 +169,45 @@ def pick_polarity(
         else:
             print(f"{event.key} is not bound")
 
+    def filter_data(event):
+        nonlocal seismo_line, high_slider, low_slider, trace, line, pick
+
+        lowcut = low_slider.val
+        highcut = high_slider.val
+        if lowcut > highcut:
+            print("Low greater than high, ignoring")
+            return
+        if lowcut == low_slider.valinit and highcut == high_slider.valinit:
+            # Revert to unfiltered
+            filtered = trace
+        elif lowcut == low_slider.valinit:
+            filtered = trace.copy().detrend().taper(0.1).filter("lowpass", freq=highcut)
+        elif highcut == high_slider.valinit:
+            filtered = trace.copy().detrend().taper(0.1).filter("highpass", freq=lowcut)
+        else:
+            filtered = trace.copy().detrend().taper(0.1).filter("bandpass", freqmin=lowcut, freqmax=highcut)
+        seismo_line.set_data(filtered.times(), filtered.data)
+        ax = seismo_line.axes
+        ax.set_ylim((filtered.data.min(), filtered.data.max()))
+        # Cope with change in ylimits
+        pick_time = pick.time - starttime
+        line.set_data([pick_time, pick_time], [filtered.data.min(), filtered.data.max()])
+        ax.draw_artist(line)
+        ax.draw_artist(seismo_line)
+        seismo_line.figure.canvas.draw()
+
+    def unfilter(event):
+        nonlocal high_slider, low_slider
+        print("Reseting")
+        high_slider.reset()
+        low_slider.reset()
+        filter_data(event)
+
+    low_slider.on_changed(filter_data)
+    high_slider.on_changed(filter_data)
+    reset_button.on_clicked(unfilter)
+
+
     # Attach responder
     cid = fig.canvas.mpl_connect('key_press_event', updown)
 
@@ -147,10 +232,15 @@ def check_event(
     event: Event,
     pre_pick: float=1.0,
     post_pick: float=1.0,
+    show_buttons: bool = False,
+    check_range: float = None,
 ):
+    if not show_buttons:
+        import matplotlib as mpl
+        mpl.rcParams['toolbar'] = 'None'
     import matplotlib.pyplot as plt
 
-    plt.style.use("dark_background")  # Easier on my eyes
+    #plt.style.use("dark_background")  # Easier on my eyes
 
     # Keep all the non P-picks
     picks_to_check = [p for p in event.picks if p.phase_hint.startswith(("P", "S"))]
@@ -161,16 +251,45 @@ def check_event(
     checked_picks = []
     i = 0  # Using a while loop to allow us to go back if we fuckup.
     fig, ax = plt.subplots(figsize=(12, 8))
+    fig.subplots_adjust(bottom=0.25)
+    axlowcut = fig.add_axes([0.25, 0.15, 0.65, 0.03])
+    axhighcut = fig.add_axes([0.25, 0.1, 0.65, 0.03])
+    resetax = fig.add_axes([0.5, 0.025, 0.09, 0.04])
+
     while i < len(picks_to_check):
         pick = picks_to_check[i]
-        tr = st.select(station=pick.waveform_id.station_code)
+        tr = st.select(
+            network=pick.waveform_id.network_code,
+            station=pick.waveform_id.station_code,
+            location=pick.waveform_id.location_code,
+            channel=pick.waveform_id.channel_code)
         if len(tr) == 0:
             print(f"No data for {pick.waveform_id.station_code}")
             continue
             # pick.polarity = "undecidable"
+        if check_range:
+            if tr[0].data.max() - tr[0].data.min() <= check_range:
+                print("Small range found")
+                if pick.phase_hint == "S":
+                    print("Looking for the other horizontal")
+                    _station_st = st.select(
+                        network=pick.waveform_id.network_code,
+                        station=pick.waveform_id.station_code,
+                        location=pick.waveform_id.location_code,
+                        channel=pick.waveform_id.channel_code[0:-1] + "?")
+                    other_horiz = [_tr for _tr in _station_st.merge()
+                                   if _tr.stats.channel != pick.waveform_id.channel_code
+                                   and _tr.stats.channel[-1] != "Z"]
+                    if len(other_horiz) == 0:
+                        print("No other horizontal found")
+                    else:
+                        tr = Stream(other_horiz[0])
+                else:
+                    print(f"Caution, no other channel to check {pick.phase_hint} on")
         for _tr in tr.merge():
             checked_pick, mistake, _quit = pick_polarity(
-                _tr, pick.copy(), fig=fig, pre_pick=pre_pick, post_pick=post_pick)
+                _tr, pick.copy(), fig=fig, pre_pick=pre_pick, post_pick=post_pick,
+                ax=ax, axlowcut=axlowcut, axhighcut=axhighcut, resetax=resetax)
             if checked_pick is None:
                 print("Removing pick")
                 continue
