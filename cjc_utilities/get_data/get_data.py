@@ -11,7 +11,8 @@ def get_event_data(
     event=None,
     length=60,
     all_channels=False,
-    ignore_rotated=True
+    ignore_rotated=True,
+    default_channels=["E??", "H??", "S??"],
 ):
     """
     Get data for an event
@@ -35,14 +36,21 @@ def get_event_data(
         if all_channels and pick.waveform_id.channel_code:
             channel = "{0}?".format(pick.waveform_id.channel_code[0:2])
         else:
-            channel = pick.waveform_id.channel_code or "*"
+            channel = pick.waveform_id.channel_code or default_channels
         chan_info = (pick.waveform_id.network_code or "*",
                      pick.waveform_id.station_code or "*",
                      pick.waveform_id.location_code or "*", channel,
                      t1, t2)
         if ignore_rotated and channel[-1] in ["R", "T"]:
             continue
-        if chan_info not in bulk:
+        if isinstance(chan_info[3], list):
+            for _chan in chan_info[3]:
+                _chan_info = (
+                    chan_info[0], chan_info[1], chan_info[2], _chan,
+                    chan_info[4], chan_info[5])
+                if _chan_info not in bulk:
+                    bulk.append(_chan_info)
+        elif chan_info not in bulk:
             bulk.append(chan_info)
     try:
         st = client.get_waveforms_bulk(bulk)
