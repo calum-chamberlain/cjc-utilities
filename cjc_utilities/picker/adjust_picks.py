@@ -63,6 +63,12 @@ def pick_polarity(
         ax.clear()  # Remove the old plot
 
     trace = trace.slice(pick.time - pre_pick, pick.time + post_pick)
+    if len(trace.data) == 0:
+        print(f"No data for {trace.id}")
+        return None, False, False
+    if pick.time < trace.stats.starttime or pick.time > trace.stats.endtime:
+        print("Pick outside data, cannot check")
+        return None, False, False
     starttime = trace.stats.starttime
     delta = trace.stats.delta
     phase_type = pick.phase_hint[0]
@@ -323,7 +329,8 @@ def pick_geonet_event(eventid: str) -> Event:
     client = Client("GEONET")
 
     event, st = get_event_data(client=client, eventid=eventid, length=20,
-                               all_channels=False, ignore_rotated=True)
+                               all_channels=False, ignore_rotated=True,
+                               start_at_origin=False)
     checked_event = check_event(st=st, event=event)
     return checked_event
 
@@ -337,4 +344,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     checked_event = pick_geonet_event(args.eventid)
-    check_event.write(args.outfile, format="QUAKEML")
+    checked_event.write(args.outfile, format="QUAKEML")
