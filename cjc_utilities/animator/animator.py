@@ -154,7 +154,7 @@ def _blank_map(lons, lats, color, projection="global",
                 not isinstance(color, (str, native_str)):
             show_colorbar = True
         else:
-            show_colorbar = Falsee`, a colorbar is plotted if more than one
+            show_colorbar = False`, a colorbar is plotted if more than one
         object is plotted. Using `True`/`False` the colorbar can be forced
         on/off.
     :type title: str
@@ -307,8 +307,12 @@ def _blank_map(lons, lats, color, projection="global",
         x0, y0 = proj.transform_point(lon_0, lat_0, proj.as_geodetic())
         map_ax.set_xlim(x0 - width / 2, x0 + width / 2)
         map_ax.set_ylim(y0 - height / 2, y0 + height / 2)
-    else:
-        map_ax.set_global()
+    # else:
+        # map_ax.set_global()
+    map_ax.set_extent(
+        [min(lons) - .5, max(lons) + .5, min(lats) - .5, max(lats) + .5],
+        crs=ccrs.PlateCarree())
+
 
     # Pick features at specified resolution.
     if resolution in ("10m", "50m", "110m"):
@@ -333,17 +337,17 @@ def _blank_map(lons, lats, color, projection="global",
 
         # Draw coast lines, country boundaries, fill continents.
         map_ax.set_facecolor(water_fill_color)
-        map_ax.add_feature(ocean, facecolor=water_fill_color)
-        map_ax.add_feature(land, facecolor=continent_fill_color)
-        map_ax.add_feature(borders, edgecolor='0.75')
-        map_ax.coastlines(resolution=resolution, color='0.4')
+        map_ax.add_feature(ocean, facecolor=water_fill_color, rasterized=True)
+        map_ax.add_feature(land, facecolor=continent_fill_color, rasterized=True)
+        map_ax.add_feature(borders, edgecolor='0.75', rasterized=True)
+        map_ax.coastlines(resolution=resolution, color='0.4', rasterized=True)
     else:
         # Use the GSHHG interface
         coast = cfeature.GSHHSFeature(
             scale=resolution, levels=[1], facecolor=continent_fill_color, 
             edgecolor="0.4")
         map_ax.set_facecolor(water_fill_color)
-        map_ax.add_feature(coast)
+        map_ax.add_feature(coast, rasterized=True)
         
 
     # Draw grid lines - TODO: draw_labels=True doesn't work yet.
@@ -386,9 +390,18 @@ def _blank_map(lons, lats, color, projection="global",
                 locator = None
                 formatter = None
         cmap = get_cmap(name=colormap)
+        # Add arrows to cbar to indicate out of range data
+        extend = "neither"
+        if norm.vmax and norm.vmax < max(color):
+            extend = "max"
+        if norm.vmin and norm.vmin > min(color):
+            if extend == "max":
+                extend = "both"
+            else:
+                extend = "min"
         cb = ColorbarBase(
             cm_ax, norm=norm, cmap=cmap, orientation='horizontal',
-            ticks=locator, format=formatter)
+            ticks=locator, format=formatter, extend=extend)
         cb.set_label(color_label)
         # Compat with old matplotlib versions.
         if hasattr(cb, "update_ticks"):
