@@ -12,7 +12,10 @@ import numpy as np
 from future.utils import native_str
 import datetime
 import warnings
+
 from matplotlib.dates import AutoDateFormatter, AutoDateLocator, date2num
+from matplotlib.cm import get_cmap
+
 import cartopy.crs as ccrs
 try:
     from progressbar import ProgressBar
@@ -478,6 +481,8 @@ class AnimatedCatalog(Catalog):
         # Create the colormap for date based plotting.
         if colormap is None:
             colormap = obspy_sequential
+        elif isinstance(colormap, str):
+            colormap = get_cmap(colormap)
         norm = Normalize(vmin=min(colors), vmax=max(colors))
 
         if title is None:
@@ -489,7 +494,7 @@ class AnimatedCatalog(Catalog):
         max_size_ = max(mags) + 1
 
         if fig is None:
-            fig, map_ax, _ = _blank_map(
+            fig, map_ax, _, _ = _blank_map(
                 lons, lats, colors, projection=projection,
                 resolution=resolution,
                 continent_fill_color=continent_fill_color,
@@ -502,8 +507,8 @@ class AnimatedCatalog(Catalog):
         scatters = []
         for _, alpha in zip(catalog_deck, alphas):
             scatters.append(map_ax.scatter(
-                [None], [None], marker="o", s=[], c=[], zorder=10,
-                cmap=colormap, transform=ccrs.Geodetic(), alpha=alpha))
+                [], [], marker="o", s=[], c=[], zorder=10,
+                cmap=colormap, transform=ccrs.PlateCarree(), alpha=alpha))
         frame_time = catalog_start - interval
         timestamp = map_ax.text(
             0.05, 0.05, frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"),
@@ -533,11 +538,16 @@ class AnimatedCatalog(Catalog):
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
             if HAS_PROGRESS:
                 bar.update(frame)
-            return scatters
+            else:
+                print(f"\r{frame}")
+            artists = [timestamp, *scatters]
+            return artists
 
         anim = FuncAnimation(
             fig, update, frames=frames, interval=interval, repeat=False,
             blit=True)
+        if HAS_PROGRESS:
+            bar.finish()
 
         if show:
             plt.show()
@@ -550,7 +560,7 @@ if __name__ == '__main__':
 
     client = Client("GEONET")
     cat = client.get_events(
-        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 5, 20),
+        starttime=UTCDateTime(2019, 1, 1), endtime=UTCDateTime(2019, 1, 10),
         maxdepth=120, maxlatitude=-32., minlatitude=-49, minlongitude=164.2,
         maxlongitude=179.)
     print("Downloaded catalog of {0} events".format(len(cat)))

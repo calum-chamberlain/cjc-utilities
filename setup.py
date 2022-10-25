@@ -10,9 +10,11 @@ setup(
     license='GPL',
     packages=[
         'cjc_utilities', 'cjc_utilities.animator', 'cjc_utilities.get_data',
-        'cjc_utilities.coordinates',
+        'cjc_utilities.coordinates', 'cjc_utilities.picker',
         'cjc_utilities.plot_event', 'cjc_utilities.io', 
         'cjc_utilities.magnitude_inversion'],
     zip_safe=False,
-    scripts=["cjc_utilities/plot_event/plot_event.py"]
+    scripts=["cjc_utilities/plot_event/plot_event.py",
+             "cjc_utilities/picker/adjust_picks.py",
+             "cjc_utilities/picker/seismic_picker.py"]
 )
