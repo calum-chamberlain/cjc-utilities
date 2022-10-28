@@ -262,6 +262,7 @@ def check_event(
     axhighcut = fig.add_axes([0.25, 0.1, 0.65, 0.03])
     resetax = fig.add_axes([0.5, 0.025, 0.09, 0.04])
 
+    _quit = False
     while i < len(picks_to_check):
         pick = picks_to_check[i]
         tr = st.select(
@@ -301,7 +302,7 @@ def check_event(
                 continue
             if _quit:
                 print("Quitting")
-                return None
+                break
             if mistake is True:
                 print("You fucked up - removing last pick")
                 if i == 0:
@@ -317,6 +318,8 @@ def check_event(
         else:
             # If we don't break, continue
             i += 1
+        if _quit:
+            break
     event_picked = event.copy()
     event_picked.picks = picks_to_keep + checked_picks
     plt.close(fig)
