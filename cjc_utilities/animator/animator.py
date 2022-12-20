@@ -391,7 +391,7 @@ def _blank_map(lons, lats, color, projection="global",
         cmap = get_cmap(name=colormap)
         cb = ColorbarBase(
             cm_ax, norm=norm, cmap=cmap, orientation='horizontal',
-            ticks=locator, format=formatter)
+            ticks=locator, format=formatter, extend="max")
         cb.set_label(color_label)
         # Compat with old matplotlib versions.
         if hasattr(cb, "update_ticks"):
