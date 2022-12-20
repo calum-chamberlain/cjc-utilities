@@ -13,6 +13,7 @@ def get_event_data(
     all_channels=False,
     ignore_rotated=True,
     default_channels=["E??", "H??", "S??"],
+    start_at_origin=True,
 ):
     """
     Get data for an event
@@ -37,6 +38,10 @@ def get_event_data(
             channel = "{0}?".format(pick.waveform_id.channel_code[0:2])
         else:
             channel = pick.waveform_id.channel_code or default_channels
+        if not start_at_origin:
+            # Start 10% of length before pick time
+            t1 = pick.time - (0.1 * length)
+            t2 = t1 + length
         chan_info = (pick.waveform_id.network_code or "*",
                      pick.waveform_id.station_code or "*",
                      pick.waveform_id.location_code or "*", channel,
