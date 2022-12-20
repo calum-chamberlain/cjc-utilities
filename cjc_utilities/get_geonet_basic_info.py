@@ -113,7 +113,6 @@ def _get_geonet_quakes(
     return earthquakes
 
 
-
 def get_geonet_events(startdate, enddate, bbox=(163.96, -49.18, 182.6, -32.3),
                       max_chunk=365, write_out=False):
     if enddate - startdate > timedelta(days=max_chunk):
@@ -142,11 +141,13 @@ def get_geonet_events(startdate, enddate, bbox=(163.96, -49.18, 182.6, -32.3),
         reader = csv.DictReader(response.read().decode('utf-8').splitlines())
         reader = [line for line in reader]
         for line in reader:
+            # Sanitize keys - sometimes there are spaces
+            line = {k.strip(): v for k, v in line.items()}
             event_info.append(
-                {"latitude": float(line[' latitude']),
+                {"latitude": float(line['latitude']),
                  "longitude": float(line['longitude']),
-                 "depth": float(line[' depth']),
-                 "magnitude": float(line[' magnitude']),
+                 "depth": float(line['depth']),
+                 "magnitude": float(line['magnitude']),
                  "origin-time": dt.strptime(line['origintime'],
                                             "%Y-%m-%dT%H:%M:%S.%fZ"),
                  "id": line['publicid']})
