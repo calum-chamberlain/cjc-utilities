@@ -5,6 +5,74 @@ files in hour-long, single-channel files in year/julian day directories.
 Author: Calum Chamberlain 2016
 """
 
+def get_event_data(
+    client,
+    eventid=None,
+    event=None,
+    length=60,
+    all_channels=False,
+    ignore_rotated=True,
+    default_channels=["E??", "H??", "S??"],
+    start_at_origin=True,
+):
+    """
+    Get data for an event
+
+    """
+
+    from obspy import Stream
+    from obspy.clients.fdsn.client import FDSNNoDataException, FDSNException
+
+    event = event or client.get_events(eventid=eventid)[0]
+
+    try:
+        origin_time = event.preferred_origin().time or event.origins[0].time
+    except AttributeError:
+        # If there isn't an origin time, use the start of the stream
+        origin_time = min([pick.time for pick in event.picks])
+    t1 = origin_time - length / 10
+    t2 = t1 + length
+    bulk = []
+    for pick in event.picks:
+        if all_channels and pick.waveform_id.channel_code:
+            channel = "{0}?".format(pick.waveform_id.channel_code[0:2])
+        else:
+            channel = pick.waveform_id.channel_code or default_channels
+        if not start_at_origin:
+            # Start 10% of length before pick time
+            t1 = pick.time - (0.1 * length)
+            t2 = t1 + length
+        chan_info = (pick.waveform_id.network_code or "*",
+                     pick.waveform_id.station_code or "*",
+                     pick.waveform_id.location_code or "*", channel,
+                     t1, t2)
+        if ignore_rotated and channel[-1] in ["R", "T"]:
+            continue
+        if isinstance(chan_info[3], list):
+            for _chan in chan_info[3]:
+                _chan_info = (
+                    chan_info[0], chan_info[1], chan_info[2], _chan,
+                    chan_info[4], chan_info[5])
+                if _chan_info not in bulk:
+                    bulk.append(_chan_info)
+        elif chan_info not in bulk:
+            bulk.append(chan_info)
+    try:
+        st = client.get_waveforms_bulk(bulk)
+    except (FDSNNoDataException, FDSNException) as e:
+        print("No data exception - trying individual channels")
+        st = Stream()
+        for chan_info in bulk:
+            try:
+                st += client.get_waveforms(
+                    network=chan_info[0], station=chan_info[1],
+                    location=chan_info[2], channel=chan_info[3],
+                    starttime=chan_info[4], endtime=chan_info[5])
+                print("Downloaded for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
+            except FDSNNoDataException:
+                print("No data for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
+    return event, st
+
 
 def get_data(network, starttime, endtime, outdir='.'):
     """
