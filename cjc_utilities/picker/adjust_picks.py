@@ -272,8 +272,9 @@ def check_event(
             channel=pick.waveform_id.channel_code)
         if len(tr) == 0:
             print(f"No data for {pick.waveform_id.station_code}")
-            continue
+            i += 1
             # pick.polarity = "undecidable"
+            continue
         if check_range:
             if tr[0].data.max() - tr[0].data.min() <= check_range:
                 print("Small range found")
