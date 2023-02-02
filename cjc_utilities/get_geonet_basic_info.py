@@ -144,10 +144,10 @@ def get_geonet_events(startdate, enddate, bbox=(163.96, -49.18, 182.6, -32.3),
             # Sanitize keys - sometimes there are spaces
             line = {k.strip(): v for k, v in line.items()}
             event_info.append(
-                {"latitude": float(line['latitude']),
-                 "longitude": float(line['longitude']),
-                 "depth": float(line['depth']),
-                 "magnitude": float(line['magnitude']),
+                {"latitude": float(line.get(' latitude', line['latitude'])),  # Cope with dumb formatting
+                 "longitude": float(line.get(' longitude', line['longitude'])),
+                 "depth": float(line.get(' depth', line['depth'])),
+                 "magnitude": float(line.get(' magnitude', line['magnitude'])),
                  "origin-time": dt.strptime(line['origintime'],
                                             "%Y-%m-%dT%H:%M:%S.%fZ"),
                  "id": line['publicid']})

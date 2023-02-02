@@ -272,8 +272,9 @@ def check_event(
             channel=pick.waveform_id.channel_code)
         if len(tr) == 0:
             print(f"No data for {pick.waveform_id.station_code}")
-            continue
+            i += 1
             # pick.polarity = "undecidable"
+            continue
         if check_range:
             if tr[0].data.max() - tr[0].data.min() <= check_range:
                 print("Small range found")
@@ -326,15 +327,18 @@ def check_event(
     return event_picked
 
 
-def pick_geonet_event(eventid: str) -> Event:
+def pick_geonet_event(eventid: str, length: float) -> Event:
     from cjc_utilities.get_data.get_data import get_event_data
 
     client = Client("GEONET")
 
+    print("Downloading data")
     event, st = get_event_data(client=client, eventid=eventid, length=20,
                                all_channels=False, ignore_rotated=True,
                                start_at_origin=False)
-    checked_event = check_event(st=st, event=event)
+    print("Checking event")
+    checked_event = check_event(
+        st=st, event=event, pre_pick=length / 2, post_pick=length / 2)
     return checked_event
 
 
@@ -344,7 +348,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-e", "--eventid", type=str, required=True)
     parser.add_argument("-o", "--outfile", type=str, default="Checked_event.xml")
+    parser.add_argument("-l", "--length", type=float, default=2.0, 
+                        help="Length in seconds to plot for each trace")
 
     args = parser.parse_args()
-    checked_event = pick_geonet_event(args.eventid)
+    checked_event = pick_geonet_event(args.eventid, length=args.length)
     checked_event.write(args.outfile, format="QUAKEML")
