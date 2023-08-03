@@ -11,17 +11,24 @@ import datetime as dt
 import shutil
 import tempfile
 import glob
+import fnmatch
+import datetime as dt
 
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from typing import Union, Iterable
 from obspy import UTCDateTime, Stream, read
 
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
 
-GEONET_AWS = "s3://geonet-open-data/waveforms/miniseed/"
 
-PATH_STRUCT = ("{date.year}/{date.year}.{date.julday:03d}/"
-               "{station}.{network}/{date.year}.{date.julday:03d}."
-               "{station}.{location}-{channel}.{network}.D")
+GEONET_AWS = "geonet-open-data"
+
+DAY_STRUCT = "waveforms/miniseed/{date.year}/{date.year}.{date.julday:03d}"
+CHAN_STRUCT = ("{station}.{network}/{date.year}.{date.julday:03d}."
+              "{station}.{location}-{channel}.{network}.D")
 
 Logger = logging.getLogger(__name__)
 
@@ -29,13 +36,22 @@ Logger = logging.getLogger(__name__)
 class AWSClient:
     def __init__(
         self, 
-        base_url: str = GEONET_AWS, 
-        path_structure: str = PATH_STRUCT,
+        bucket_name: str = GEONET_AWS,
+        day_structure: str = DAY_STRUCT,
+        nslc_structure: str = CHAN_STRUCT,
         file_length_seconds: float = 86400
     ):
-        self.base_url = base_url
-        self.path_structure = path_structure
+        self.bucket_name = bucket_name
+        self.day_structure = day_structure
+        self.nslc_structure = nslc_structure
         self.file_length_seconds = file_length_seconds
+
+    @property
+    def _s3(self):
+        """ s3 access as property to enforce instantiation for individual threads. """
+        # return boto3.client("s3", config=Config(signature_version=UNSIGNED))
+        bob = boto3.resource('s3', config=Config(signature_version=UNSIGNED))
+        return bob.Bucket(self.bucket_name)
 
     def get_waveforms(
         self,
@@ -60,22 +76,29 @@ class AWSClient:
         for _bulk in bulk:
             remote_paths.extend(self._bulk_to_remote(*_bulk, **kwargs))
 
+        # Work out the maximum extent of data to read in
+        min_start = min(_bulk[4] for _bulk in bulk)
+        max_end = max(_bulk[5] for _bulk in bulk)
+
         temp_dir = tempfile.mkdtemp(prefix="AWSClient_")
+        Logger.info(f"Downloading files to {temp_dir}")
         self._download_remote_paths(remote_paths, threaded=threaded, temp_dir=temp_dir)
         st = Stream()
-        local_paths = glob.glob(temp_dir + "/*")
-        for local_path in local_paths:
-            st += read(local_path)
+        for path, _, files in os.walk(temp_dir):
+            for f in files:
+                Logger.info(f"Reading from {f}")
+                st += read(os.path.join(path, f), starttime=min_start, endtime=max_end)
         st.merge()
-        
+
         trimmed_st = Stream()
         for _bulk in bulk:
             n, s, l, c, _start, _end = _bulk
             trimmed_st += st.select(n, s, l, c).slice(_start, _end).copy()
 
         shutil.rmtree(temp_dir)
+        trimmed_st = trimmed_st.merge().split()
 
-        return trimmed_st.merge()
+        return trimmed_st
     
     def _download_remote_paths(
         self, 
@@ -84,12 +107,21 @@ class AWSClient:
         temp_dir: str
     ):
         
-        def download(remote):
-            # TODO: Cope with wildcards - use include and exclude? https://www.janbasktraining.com/community/aws/how-to-use-aws-s3-cp-wildcards-to-copy-group-of-files-in-aws-cli
-            ret = subprocess.run(
-                ["aws", "s3", "cp", "--no-sign-request", remote, temp_dir],
-                capture_output=True)
-            return ret
+        def download(remote, max_retries=999):
+            local_path = os.path.join(temp_dir, remote)
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+
+            attempt = 0
+            while attempt <= max_retries:
+                try:
+                    Logger.info(f"Downloading {remote} attempt {attempt} of {max_retries}")
+                    self._s3.download_file(remote, local_path)
+                except Exception as e:
+                    Logger.error(f"Could not download {remote} due to {e}")
+                    attempt += 1
+                    continue
+                break
+            return
             
         if threaded:
             with ThreadPoolExecutor() as executor:
@@ -97,6 +129,11 @@ class AWSClient:
         else:
             results = [download(remote) for remote in remote_paths]
         
+        for res in results:
+            if isinstance(res, Exception):
+                raise(res)
+            elif isinstance(res, str):
+                Logger.warning(res)
         return    
 
     def _bulk_to_remote(
@@ -120,7 +157,7 @@ class AWSClient:
         remote_paths = []
         date = starttime - self.file_length_seconds
         while date < _endtime:
-            remote_paths.append(self._make_remote_path(
+            remote_paths.extend(self._make_remote_path(
                 network=network, station=station, location=location,
                 channel=channel, date=date, **kwargs))
             date += dt.timedelta(seconds=self.file_length_seconds)
@@ -137,11 +174,25 @@ class AWSClient:
         **kwargs
     ):
         nslc = ".".join([network, station, location, channel])
-        if "*" in nslc or "?" in nslc:
-            raise NotImplementedError(f"Wildcards found - not designed for this: {nslc}")
-        remote_path = self.base_url + self.path_structure
-        remote_path = remote_path.format(
+        day_contents = _list_day_files(
+            bucket=self._s3, day_structure=self.day_structure, date=date.datetime)
+
+        path_structure = '/'.join((self.day_structure, self.nslc_structure))
+        nslc_path = path_structure.format(
             network=network, station=station, location=location, channel=channel,
             date=date)
-        return remote_path
+        remote_paths = fnmatch.filter(day_contents, nslc_path)
 
+        Logger.debug(f"{nslc} at {date}: {remote_paths}")
+        return remote_paths
+
+
+@lru_cache(10)
+def _list_day_files(bucket, day_structure: str, date: dt.datetime):
+    # Note we need to use datetime input to make this hashable.
+    # List the contents for this date, then search in that list for matches
+    Logger.info(f"Getting contents of {bucket} for {date}")
+    day_contents = bucket.objects.filter(
+        Prefix=day_structure.format(date=UTCDateTime(date)))
+    files = {c.key for c in day_contents if not c.key.endswith('/')}
+    return files
