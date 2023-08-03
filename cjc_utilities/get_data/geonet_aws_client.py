@@ -69,7 +69,7 @@ class AWSClient:
     def get_waveforms_bulk(
         self,
         bulk: Iterable,
-        threaded: bool = True,
+        threaded: bool = False,
         **kwargs
     ):
         remote_paths = []
