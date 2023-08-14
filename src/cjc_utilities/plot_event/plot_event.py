@@ -166,7 +166,7 @@ def _plot_channel(ax, tr, picks=[], arrivals=[], lines=[], labels=[], waveform_c
     return lines, labels, min_x, max_x
 
 
-if __name__ == "__main__":
+def main():
     from obspy.clients.fdsn import Client
     import matplotlib.pyplot as plt
     import argparse
@@ -222,3 +222,6 @@ if __name__ == "__main__":
         print(f"Saved plot to {args['outfile']}")
     else:
         plt.show()
+
+if __name__ == "__main__":
+    main()

@@ -387,7 +387,7 @@ class Picker:
             self.time, self.amplitude)
 
 
-if __name__ == "__main__":
+def main():
     import argparse
     import glob
     from obspy import read, read_events
@@ -437,3 +437,7 @@ if __name__ == "__main__":
         event_out.write(args["outfile"], format="QUAKEML")
     else:
         print("No picks made, no outfile")
+
+
+if __name__ == "__main__":
+    main()

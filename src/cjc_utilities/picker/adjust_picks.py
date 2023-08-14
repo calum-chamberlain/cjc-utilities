@@ -342,7 +342,7 @@ def pick_geonet_event(eventid: str, length: float) -> Event:
     return checked_event
 
 
-if __name__ == "__main__":
+def main():
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -354,3 +354,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     checked_event = pick_geonet_event(args.eventid, length=args.length)
     checked_event.write(args.outfile, format="QUAKEML")
+
+
+if __name__ == "__main__":
+    main()

@@ -166,7 +166,7 @@ def get_geonet_events(startdate, enddate, bbox=(163.96, -49.18, 182.6, -32.3),
         return event_info
 
 
-if __name__ == "__main__":
+def main()    
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -181,3 +181,7 @@ if __name__ == "__main__":
     get_geonet_events(startdate=dt.strptime(args['startdate'], "%Y/%m/%d"),
                       enddate=dt.strptime(args['enddate'], "%Y/%m/%d"),
                       write_out=True)
+
+
+if __name__ == "__main__":
+    main()

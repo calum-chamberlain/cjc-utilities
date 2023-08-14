@@ -1,0 +1,44 @@
+[build-system]
+requires = ['hatchling']
+build-backend = 'hatchling.build'
+
+[project]
+name = "cjc_utilities"
+version = "0.0.1"
+authors = [
+  { name="Calum Chamberlain", email="calum.chamberlain@vuw.ac.nz" },
+]
+description="Utility functions written by Calum that do not belong elsewhere"
+readme = "README.md"
+requires-python = ">3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+
+dependencies = [
+   "obspy",
+   "matplotlib",
+   "numpy",
+   "scipy",
+   "argparse",
+   "cartopy",
+   "progressbar",
+   "scikit-learn",
+   "boto3",
+   "pandas",
+]
+
+
+
+[project.scripts]
+plot-event = "cjc_utilities.plot_event.plot_event:main"
+adjust-picks = "cjc_utilities.picker.adjust_picks:main"
+seismic-picker = "cjc_utilities.picker.seismic_picker:main"
+get-data = "cjc_utilities.get_data.get_data:main"
+get-geonet-events = "cjc_utilities.get_data.get_geonet_basic_info:main"
+
+[project.urls]
+"Homepage" = "https://github.com/calum-chamberlain/cjc-utilities"
+"Bug Tracker" = "https://github.com/calum-chamberlain/cjc-utilities/issues"

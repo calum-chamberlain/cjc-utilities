@@ -218,7 +218,7 @@ def get_mass_data(network, stations, starttime, endtime, outdir='.', lat=0, lon=
                      stationxml_storage="stations", threads_per_client=3)
 
 
-if __name__ == '__main__':
+def main():
     import sys
     from obspy import UTCDateTime
     if not len(sys.argv) == 5:
@@ -230,3 +230,7 @@ if __name__ == '__main__':
     endtime = UTCDateTime(sys.argv[3])
     outdir = sys.argv[4]
     get_mass_data(network, starttime, endtime, outdir)
+
+
+if __name__ == "__main__":
+    main()
