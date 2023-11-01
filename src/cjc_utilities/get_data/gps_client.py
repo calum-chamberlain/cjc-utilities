@@ -5,6 +5,7 @@ Simple client for GPS data from GeoNet.
 
 import requests
 import numpy as np
+import json
 import copy
 
 import matplotlib.pyplot as plt
@@ -15,6 +16,7 @@ from typing import List, Union, Iterable
 
 
 GEONET_FITS = "http://fits.geonet.org.nz/observation"
+GEONET_FITS_STATION = "http://fits.geonet.org.nz/site?"
 DEFAULT_COLORS = {"u": "grey", "e": "lightcoral", "n": "teal"}
 
 
@@ -22,10 +24,10 @@ class GPSData():
     def __init__(
         self, 
         receiver: str, 
-        component: str, 
+        component: str,
         times: np.ndarray,
         observations: np.ndarray, 
-        errors: np.ndarray
+        errors: np.ndarray,
     ):
         """ Holder for GPS data. """
         assert times.shape == observations.shape, "Times is not shaped like observations"
@@ -110,10 +112,16 @@ class GPSStation():
     _receiver = None
     def __init__(
         self,
-        components: List[GPSData] = []
+        components: List[GPSData] = [],
+        latitude: float = None,
+        longitude: float = None,
+        elevation: float = None,
     ):
         """ Holder for channels from one station. """
         self.components = []
+        self.latitude = latitude
+        self.longitude = longitude
+        self.elevation = elevation
         if len(components):
             self._receiver = components[0].receiver
             for component in components:
@@ -182,6 +190,20 @@ class GPSStation():
         return fig
 
 
+def get_gps_location(receiver: str) -> dict:
+    parameters = {"siteID": receiver}
+    response = requests.get(GEONET_FITS_STATION, params=parameters)
+    assert response.status_code == "200", "Bad request"
+    payload = response.content.decode("utf-8")
+    payload = json.loads(payload)
+    return {
+        "latitude": payload['features'][0]['geometry']['coordinates'][1],
+        "longitude": payload['features'][0]['geometry']['coordinates'][0],
+        "elevation": payload['features'][0]['properties']['height'],
+    }
+
+
+
 def get_gps_data(receiver: str, component: str = None) -> GPSStation:
     components = ["u", "n", "e"]
     if component:
@@ -189,7 +211,9 @@ def get_gps_data(receiver: str, component: str = None) -> GPSStation:
             f"Component ({component}) must be in {components})"
         components = [component]
 
-    station = GPSStation()
+    location = get_gps_location(receiver)
+
+    station = GPSStation(**location)
     for component in components:
         parameters = {"typeID": component, "siteID": receiver}
         response = requests.get(GEONET_FITS, params=parameters)
