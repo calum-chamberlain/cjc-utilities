@@ -166,7 +166,7 @@ def get_geonet_events(startdate, enddate, bbox=(163.96, -49.18, 182.6, -32.3),
         return event_info
 
 
-def main()    
+def main():  
     import argparse
 
     parser = argparse.ArgumentParser(
