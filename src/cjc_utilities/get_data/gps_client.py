@@ -193,7 +193,8 @@ class GPSStation():
 def get_gps_location(receiver: str) -> dict:
     parameters = {"siteID": receiver}
     response = requests.get(GEONET_FITS_STATION, params=parameters)
-    assert response.status_code == "200", "Bad request"
+    assert response.status_code == 200, \
+        f"Bad request getting station location from {GEONET_FITS_STATION}. Response code {response.status_code}"
     payload = response.content.decode("utf-8")
     payload = json.loads(payload)
     return {
@@ -217,7 +218,8 @@ def get_gps_data(receiver: str, component: str = None) -> GPSStation:
     for component in components:
         parameters = {"typeID": component, "siteID": receiver}
         response = requests.get(GEONET_FITS, params=parameters)
-        assert response.status_code == 200, "Bad request"
+        assert response.status_code == 200, \
+            f"Bad request getting data from {GEONET_FITS}. Response code {response.status_code}"
         payload = response.content.decode("utf-8").split("\n")
         # payload is a csv with header
         payload = [p.split(',') for p in payload]
