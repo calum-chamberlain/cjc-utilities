@@ -24,10 +24,16 @@ def inv_to_nll(
                 lat, lon = chan.latitude, chan.longitude
                 
                 # Check values are consistent
-                assert depths.get(sta.code) in [None, depth]
-                assert elevs.get(sta.code) in [None, elev]
-                assert lats.get(sta.code) in [None, lat]
-                assert lons.get(sta.code) in [None, lon]
+                if depths.get(sta.code) not in [None, depth]:
+                    print(f"{depth} for {sta.code} is changed from {depths.get(sta.code)}")
+                    choice = input(f"Use old depth ({depths.get(sta.code)}) or noew depth ({depth}) (o/n)?")
+                    assert choice in "on", "Need to chose [o]ld or [n]ew"
+                    if choice == "o":
+                        depth = depths.get(sta.code)
+                    
+                assert elevs.get(sta.code) in [None, elev], f"{elev} for {sta.code} is changed from {elevs.get(sta.code)}"
+                assert lats.get(sta.code) in [None, lat], f"{lat} for {sta.code} is changed from {lats.get(sta.code)}"
+                assert lons.get(sta.code) in [None, lon], f"{lon} for {sta.code} is changed from {lons.get(sta.code)}"
 
                 depths[sta.code] = depth
                 elevs[sta.code] = elev
