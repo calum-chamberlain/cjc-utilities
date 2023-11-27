@@ -39,12 +39,14 @@ class AWSClient:
         bucket_name: str = GEONET_AWS,
         day_structure: str = DAY_STRUCT,
         nslc_structure: str = CHAN_STRUCT,
-        file_length_seconds: float = 86400
+        file_length_seconds: float = 86400,
+        threaded: bool = True,
     ):
         self.bucket_name = bucket_name
         self.day_structure = day_structure
         self.nslc_structure = nslc_structure
         self.file_length_seconds = file_length_seconds
+        self.threaded = threaded
 
     @property
     def _s3(self):
@@ -69,7 +71,6 @@ class AWSClient:
     def get_waveforms_bulk(
         self,
         bulk: Iterable,
-        threaded: bool = False,
         **kwargs
     ):
         remote_paths = []
@@ -87,7 +88,11 @@ class AWSClient:
         for path, _, files in os.walk(temp_dir):
             for f in files:
                 Logger.info(f"Reading from {f}")
-                st += read(os.path.join(path, f), starttime=min_start, endtime=max_end)
+                try:
+                    st += read(os.path.join(path, f), starttime=min_start, endtime=max_end)
+                except Exception as e:
+                    Logger.error(f"Could not read from {f} due to {e}; skipping")
+                    continue
         st.merge()
 
         trimmed_st = Stream()
@@ -103,7 +108,6 @@ class AWSClient:
     def _download_remote_paths(
         self, 
         remote_paths: Iterable, 
-        threaded: bool,
         temp_dir: str
     ):
         
@@ -123,7 +127,7 @@ class AWSClient:
                 break
             return
             
-        if threaded:
+        if self.threaded:
             with ThreadPoolExecutor() as executor:
                 results = executor.map(download, remote_paths)
         else:
