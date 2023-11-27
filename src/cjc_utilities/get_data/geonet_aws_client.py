@@ -83,7 +83,7 @@ class AWSClient:
 
         temp_dir = tempfile.mkdtemp(prefix="AWSClient_")
         Logger.info(f"Downloading files to {temp_dir}")
-        self._download_remote_paths(remote_paths, threaded=threaded, temp_dir=temp_dir)
+        self._download_remote_paths(remote_paths, temp_dir=temp_dir)
         st = Stream()
         for path, _, files in os.walk(temp_dir):
             for f in files:
