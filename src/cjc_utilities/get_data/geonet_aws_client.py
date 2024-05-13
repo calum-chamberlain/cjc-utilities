@@ -34,18 +34,40 @@ Logger = logging.getLogger(__name__)
 
 
 class AWSClient:
+    """
+    Drop in replacement for obspy.clients.fdsn.Client for AWS data access.
+
+    Parameters
+    ----------
+    bucket_name:
+        Name of bucket to access - note only tested for GeoNet open-data bucket
+    day_structure:
+        Internal structure of data in bucket
+    nslc_structure:
+        Structure of data according to network, station, location, channel codes
+    file_length_seconds:
+        Length of files in bucket in seconds
+    file_length_buffer:
+        Time in seconds to cope with incomplete files (e.g. files that start at 
+        slightly different times to their named structure)
+    threaded:
+        Whether to download multiple files concurrently or not: if your codes hangs
+        turn this off - AWS downloads don't always cope well with threaded access.
+    """
     def __init__(
         self, 
         bucket_name: str = GEONET_AWS,
         day_structure: str = DAY_STRUCT,
         nslc_structure: str = CHAN_STRUCT,
         file_length_seconds: float = 86400,
-        threaded: bool = True,
+        file_length_buffer: float = 300,
+        threaded: bool = False,
     ):
         self.bucket_name = bucket_name
         self.day_structure = day_structure
         self.nslc_structure = nslc_structure
         self.file_length_seconds = file_length_seconds
+        self.file_length_buffer = file_length_buffer
         self.threaded = threaded
 
     @property
@@ -156,10 +178,10 @@ class AWSClient:
         if not isinstance(endtime, UTCDateTime):
             endtime = UTCDateTime(endtime)
         
-        _endtime = endtime + self.file_length_seconds
+        _endtime = endtime + self.file_length_buffer
 
         remote_paths = []
-        date = starttime - self.file_length_seconds
+        date = starttime - self.file_length_buffer
         while date < _endtime:
             remote_paths.extend(self._make_remote_path(
                 network=network, station=station, location=location,
