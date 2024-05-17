@@ -148,7 +148,7 @@ def plot_for_all_events(
     return
 
 
-if __name__ == "__main__":
+def main():
     import json
     import glob
 
@@ -204,3 +204,8 @@ if __name__ == "__main__":
             plot_dir=args.plot_dir, length=args.length)
         with open("manual_check_complete.json", "w") as f:
             json.dump(check_dict, f)
+
+
+if __name__ == "__main__":
+    main()
+
