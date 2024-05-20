@@ -95,6 +95,7 @@ class AWSClient:
         bulk: Iterable,
         **kwargs
     ):
+        cleanup = kwargs.get("cleanup", True)
         remote_paths = []
         for _bulk in bulk:
             remote_paths.extend(self._bulk_to_remote(*_bulk, **kwargs))
@@ -111,19 +112,26 @@ class AWSClient:
             for f in files:
                 Logger.info(f"Reading from {f}")
                 try:
-                    st += read(os.path.join(path, f), starttime=min_start, endtime=max_end)
+                    _st = read(os.path.join(path, f), starttime=min_start, endtime=max_end)
                 except Exception as e:
                     Logger.error(f"Could not read from {f} due to {e}; skipping")
                     continue
+                for _tr in _st:
+                    Logger.info(f"Read in {_tr}")
+                st += _st
         st.merge()
 
         trimmed_st = Stream()
         for _bulk in bulk:
             n, s, l, c, _start, _end = _bulk
+            Logger.info(f"Trimming {n}.{s}.{l}.{c} between {_start} and {_end}")
             trimmed_st += st.select(n, s, l, c).slice(_start, _end).copy()
 
-        shutil.rmtree(temp_dir)
+        if cleanup:
+            shutil.rmtree(temp_dir)
+        Logger.info(f"Merging and splitting: \n{trimmed_st}")
         trimmed_st = trimmed_st.merge().split()
+        Logger.info(f"Result: \n{trimmed_st}")
 
         return trimmed_st
     
@@ -178,11 +186,11 @@ class AWSClient:
         if not isinstance(endtime, UTCDateTime):
             endtime = UTCDateTime(endtime)
         
-        _endtime = endtime + self.file_length_buffer
+        _endtime = endtime + self.file_length_seconds + self.file_length_buffer
 
         remote_paths = []
         date = starttime - self.file_length_buffer
-        while date < _endtime:
+        while date <= _endtime:
             remote_paths.extend(self._make_remote_path(
                 network=network, station=station, location=location,
                 channel=channel, date=date, **kwargs))
