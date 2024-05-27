@@ -34,9 +34,22 @@ def manual_check(
 ) -> dict:
     """ Perform manual checks of the detections. """
     import json
-
-    fig = None  # Reuse figure
+    fig = None
     checked_dict = checked_dict or dict()
+
+    if catalog is None:
+        print(f"No catalog given, just checking events in {plot_dir}")
+        plot_files = glob.glob(f"{plot_dir}/*.png")
+        total_events = len(plot_files)
+        for i, plot_file in enumerate(plot_files):
+            try:
+                status, fig = check_event(
+                        fig=fig, check=check, event_no=i, total_events=total_events,
+                        plot_file=plot_file)
+            except Exception as e:
+                print(f"Could not check event due to {e}")
+        return checked_dict
+
     catalog.events.sort(key=lambda e: e.picks[0].time)  # Sort by pick time
     total_events = len(catalog)
     for i, event in enumerate(catalog):
@@ -54,9 +67,10 @@ def manual_check(
 
 
 def check_event(
-    event: Event, 
-    client: Union[Client, WaveBank],
+    event: Event = None, 
+    client: Union[Client, WaveBank] = None,
     plot_dir: str = None,
+    plot_file: str = None,
     fig: plt.Figure = None, 
     min_stations: int = 4,
     check: bool = True,
@@ -69,21 +83,27 @@ def check_event(
     import matplotlib.image as img
     from cjc_utilities.plot_event.plot_event import plot_event_from_client
 
-    try:
-        event_time = (event.preferred_origin() or event.origins[0]).time
-    except IndexError:
-        event_time = sorted(event.picks, key=lambda p: p.time)[0].time
+    if event:
+        try:
+            event_time = (event.preferred_origin() or event.origins[0]).time
+        except IndexError:
+            event_time = sorted(event.picks, key=lambda p: p.time)[0].time
+    else:
+        event_time = None
     status_mapper = {"G": "good", "B": "bad", "U": "Undecided"}
     status = None
     fig = fig or plt.figure()
     if fig is not None:
         fig.clf()
     fig_name = None
-    if plot_dir:
+    if plot_dir and not plot_file:
         fig_name = FIG_NAME.format(
             plot_dir=plot_dir, 
             ori_time=(event.preferred_origin() or event.origins[-1]).time,
             rid=event.resource_id.id.split('/')[-1])
+    elif plot_file:
+        fig_name = plot_file
+    if fig_name:
         print(f"Looking for figure: {fig_name}")
     if fig_name and os.path.isfile(fig_name):
         # Reuse old figure
@@ -161,7 +181,7 @@ def main():
     parser.add_argument("--plot-dir", type=str, help="Directory to save plots to, or read from",
                         default=None)
     parser.add_argument("-c", "--check", action="store_true", help="Check detections")
-    parser.add_argument("--catalog", type=str, required=True, help="Catalog to read events from")
+    parser.add_argument("--catalog", type=str, required=False, help="Catalog to read events from")
     parser.add_argument("--client", type=str, help="FDSN client URL or ID to get waveforms from", default=None)
     parser.add_argument("--wavebank", type=str, help="WaveBank path to get data from", default=None)
     parser.add_argument("--length", type=float, help="Length of waveform to plot", default=120.0)
@@ -182,13 +202,15 @@ def main():
     elif args.wavebank:
         client = WaveBank(args.wavebank)
 
-    cat = read_events(args.catalog)
-    cat.events.sort(key=lambda ev: ev.origins[-1].time)
-    print("There are {0} events in this file".format(len(cat)))
 
     if args.plot:
+        cat = read_events(args.catalog)
+        cat.events.sort(key=lambda ev: ev.origins[-1].time)
+        print("There are {0} events in this file".format(len(cat)))
         fig = None
-        plot_for_all_events(catalog=cat, client=client, plot_dir=args.plot_dir, length=args.length, overwrite=args.overwrite)
+        plot_for_all_events(
+                catalog=cat, client=client, plot_dir=args.plot_dir, 
+                length=args.length, overwrite=args.overwrite)
 
     if args.check:
         print("Running manual check")
@@ -198,6 +220,13 @@ def main():
         else:
             check_dict = None
         fig = None
+        if args.catalog:
+            cat = read_events(args.catalog)             
+            cat.events.sort(key=lambda ev: ev.origins[-1].time)
+            print("There are {0} events in this file".format(len(cat)))
+        else:
+            assert os.path.isdir(args.plot_dir), f"{args.plot_dir} does not exist"
+            cat = None
         check_dict, fig = manual_check(
             catalog=cat, client=client,
             checked_dict=check_dict, save_progress=True, fig=fig,
