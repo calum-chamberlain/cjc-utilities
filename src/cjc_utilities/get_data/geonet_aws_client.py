@@ -209,7 +209,8 @@ class AWSClient:
     ):
         nslc = ".".join([network, station, location, channel])
         day_contents = _list_day_files(
-            bucket=self._s3, day_structure=self.day_structure, date=date.datetime)
+            bucket=self._s3, day_structure=self.day_structure, 
+            year=date.year, month=date.month, day=date.day)
 
         path_structure = '/'.join((self.day_structure, self.nslc_structure))
         nslc_path = path_structure.format(
@@ -222,11 +223,12 @@ class AWSClient:
 
 
 @lru_cache(10)
-def _list_day_files(bucket, day_structure: str, date: dt.datetime):
+def _list_day_files(bucket, day_structure: str, year: int, month: int, day: int):
     # Note we need to use datetime input to make this hashable.
     # List the contents for this date, then search in that list for matches
-    Logger.info(f"Getting contents of {bucket} for {date}")
+    Logger.info(f"Getting contents of {bucket} for {year}/{month}/{day}")
     day_contents = bucket.objects.filter(
-        Prefix=day_structure.format(date=UTCDateTime(date)))
+        Prefix=day_structure.format(date=UTCDateTime(
+            year=year, month=month, day=day)))
     files = {c.key for c in day_contents if not c.key.endswith('/')}
     return files
