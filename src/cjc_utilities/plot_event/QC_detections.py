@@ -31,6 +31,8 @@ def manual_check(
     fig: plt.Figure = None,
     check: bool = True,
     length: float = 120.0,
+    highcut: float = None,
+    lowcut: float = None
 ) -> dict:
     """ Perform manual checks of the detections. """
     import json
@@ -57,7 +59,8 @@ def manual_check(
             continue
         status, fig = check_event(
             event=event, client=client, fig=fig, check=check,
-            event_no=i, total_events=total_events, plot_dir=plot_dir)
+            event_no=i, total_events=total_events, plot_dir=plot_dir,
+            length=length, filt=(lowcut, highcut))
         if check:
             checked_dict.update({event.resource_id.id.split('/')[-1]: status})
             if save_progress:
@@ -78,6 +81,8 @@ def check_event(
     total_events: int = 1,
     min_p_picks: int = 0,
     length: float = 120.0,
+    highcut: float = None,
+    lowcut: float = None,
 ) -> str:
     """ Check a single event. """
     import matplotlib.image as img
@@ -124,7 +129,7 @@ def check_event(
             return "bad", fig
         fig = plot_event_from_client(
                 client=client, event=event, fig=fig, size=(8.5, 8.5),
-                length=length)
+                length=length, lowcut=lowcut, highcut=highcut)
     fig.canvas.draw()
     fig.show()
     status = None
@@ -186,6 +191,8 @@ def main():
     parser.add_argument("--wavebank", type=str, help="WaveBank path to get data from", default=None)
     parser.add_argument("--length", type=float, help="Length of waveform to plot", default=120.0)
     parser.add_argument("--overwrite", action="store_true", help="Overwrite old figures")
+    parser.add_argument("--lowcut", type=float, default=None, required=False)
+    parser.add_argument("--highcut", type=float, default=None, required=False)
 
     args = parser.parse_args()
 
@@ -210,7 +217,8 @@ def main():
         fig = None
         plot_for_all_events(
                 catalog=cat, client=client, plot_dir=args.plot_dir, 
-                length=args.length, overwrite=args.overwrite)
+                length=args.length, overwrite=args.overwrite,
+                lowcut=args.lowcut, highcut=args.highcut)
 
     if args.check:
         print("Running manual check")
@@ -230,7 +238,8 @@ def main():
         check_dict, fig = manual_check(
             catalog=cat, client=client,
             checked_dict=check_dict, save_progress=True, fig=fig,
-            plot_dir=args.plot_dir, length=args.length)
+            plot_dir=args.plot_dir, length=args.length,
+            highcut=args.highcut, lowcut=args.lowcut)
         with open("manual_check_complete.json", "w") as f:
             json.dump(check_dict, f)
 
