@@ -39,6 +39,8 @@ seismic-picker = "cjc_utilities.picker.seismic_picker:main"
 get-data = "cjc_utilities.get_data.get_data:main"
 get-geonet-events = "cjc_utilities.get_data.get_geonet_basic_info:main"
 inv-to-nll = "cjc_utilities.io.inv_to_nll:main"
+event-qc = "cjc_utilities.plot_event.QC_detections:main"
+plot-catalog = "cjc_utilities.map_plot:main"
 
 [project.urls]
 "Homepage" = "https://github.com/calum-chamberlain/cjc-utilities"

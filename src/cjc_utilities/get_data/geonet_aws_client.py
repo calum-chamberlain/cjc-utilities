@@ -95,6 +95,7 @@ class AWSClient:
         bulk: Iterable,
         **kwargs
     ):
+        cleanup = kwargs.get("cleanup", True)
         remote_paths = []
         for _bulk in bulk:
             remote_paths.extend(self._bulk_to_remote(*_bulk, **kwargs))
@@ -111,19 +112,26 @@ class AWSClient:
             for f in files:
                 Logger.info(f"Reading from {f}")
                 try:
-                    st += read(os.path.join(path, f), starttime=min_start, endtime=max_end)
+                    _st = read(os.path.join(path, f), starttime=min_start, endtime=max_end)
                 except Exception as e:
                     Logger.error(f"Could not read from {f} due to {e}; skipping")
                     continue
+                for _tr in _st:
+                    Logger.info(f"Read in {_tr}")
+                st += _st
         st.merge()
 
         trimmed_st = Stream()
         for _bulk in bulk:
             n, s, l, c, _start, _end = _bulk
+            Logger.info(f"Trimming {n}.{s}.{l}.{c} between {_start} and {_end}")
             trimmed_st += st.select(n, s, l, c).slice(_start, _end).copy()
 
-        shutil.rmtree(temp_dir)
+        if cleanup:
+            shutil.rmtree(temp_dir)
+        Logger.info(f"Merging and splitting: \n{trimmed_st}")
         trimmed_st = trimmed_st.merge().split()
+        Logger.info(f"Result: \n{trimmed_st}")
 
         return trimmed_st
     
@@ -178,11 +186,11 @@ class AWSClient:
         if not isinstance(endtime, UTCDateTime):
             endtime = UTCDateTime(endtime)
         
-        _endtime = endtime + self.file_length_buffer
+        _endtime = endtime + self.file_length_seconds + self.file_length_buffer
 
         remote_paths = []
         date = starttime - self.file_length_buffer
-        while date < _endtime:
+        while date <= _endtime:
             remote_paths.extend(self._make_remote_path(
                 network=network, station=station, location=location,
                 channel=channel, date=date, **kwargs))
@@ -201,7 +209,8 @@ class AWSClient:
     ):
         nslc = ".".join([network, station, location, channel])
         day_contents = _list_day_files(
-            bucket=self._s3, day_structure=self.day_structure, date=date.datetime)
+            bucket=self._s3, day_structure=self.day_structure, 
+            year=date.year, month=date.month, day=date.day)
 
         path_structure = '/'.join((self.day_structure, self.nslc_structure))
         nslc_path = path_structure.format(
@@ -214,11 +223,12 @@ class AWSClient:
 
 
 @lru_cache(10)
-def _list_day_files(bucket, day_structure: str, date: dt.datetime):
+def _list_day_files(bucket, day_structure: str, year: int, month: int, day: int):
     # Note we need to use datetime input to make this hashable.
     # List the contents for this date, then search in that list for matches
-    Logger.info(f"Getting contents of {bucket} for {date}")
+    Logger.info(f"Getting contents of {bucket} for {year}/{month}/{day}")
     day_contents = bucket.objects.filter(
-        Prefix=day_structure.format(date=UTCDateTime(date)))
+        Prefix=day_structure.format(date=UTCDateTime(
+            year=year, month=month, day=day)))
     files = {c.key for c in day_contents if not c.key.endswith('/')}
     return files

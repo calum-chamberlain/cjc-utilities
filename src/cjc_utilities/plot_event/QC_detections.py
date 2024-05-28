@@ -31,12 +31,27 @@ def manual_check(
     fig: plt.Figure = None,
     check: bool = True,
     length: float = 120.0,
+    highcut: float = None,
+    lowcut: float = None
 ) -> dict:
     """ Perform manual checks of the detections. """
     import json
-
-    fig = None  # Reuse figure
+    fig = None
     checked_dict = checked_dict or dict()
+
+    if catalog is None:
+        print(f"No catalog given, just checking events in {plot_dir}")
+        plot_files = glob.glob(f"{plot_dir}/*.png")
+        total_events = len(plot_files)
+        for i, plot_file in enumerate(plot_files):
+            try:
+                status, fig = check_event(
+                        fig=fig, check=check, event_no=i, total_events=total_events,
+                        plot_file=plot_file)
+            except Exception as e:
+                print(f"Could not check event due to {e}")
+        return checked_dict
+
     catalog.events.sort(key=lambda e: e.picks[0].time)  # Sort by pick time
     total_events = len(catalog)
     for i, event in enumerate(catalog):
@@ -44,7 +59,8 @@ def manual_check(
             continue
         status, fig = check_event(
             event=event, client=client, fig=fig, check=check,
-            event_no=i, total_events=total_events, plot_dir=plot_dir)
+            event_no=i, total_events=total_events, plot_dir=plot_dir,
+            length=length, filt=(lowcut, highcut))
         if check:
             checked_dict.update({event.resource_id.id.split('/')[-1]: status})
             if save_progress:
@@ -54,9 +70,10 @@ def manual_check(
 
 
 def check_event(
-    event: Event, 
-    client: Union[Client, WaveBank],
+    event: Event = None, 
+    client: Union[Client, WaveBank] = None,
     plot_dir: str = None,
+    plot_file: str = None,
     fig: plt.Figure = None, 
     min_stations: int = 4,
     check: bool = True,
@@ -64,26 +81,34 @@ def check_event(
     total_events: int = 1,
     min_p_picks: int = 0,
     length: float = 120.0,
+    highcut: float = None,
+    lowcut: float = None,
 ) -> str:
     """ Check a single event. """
     import matplotlib.image as img
     from cjc_utilities.plot_event.plot_event import plot_event_from_client
 
-    try:
-        event_time = (event.preferred_origin() or event.origins[0]).time
-    except IndexError:
-        event_time = sorted(event.picks, key=lambda p: p.time)[0].time
+    if event:
+        try:
+            event_time = (event.preferred_origin() or event.origins[0]).time
+        except IndexError:
+            event_time = sorted(event.picks, key=lambda p: p.time)[0].time
+    else:
+        event_time = None
     status_mapper = {"G": "good", "B": "bad", "U": "Undecided"}
     status = None
     fig = fig or plt.figure()
     if fig is not None:
         fig.clf()
     fig_name = None
-    if plot_dir:
+    if plot_dir and not plot_file:
         fig_name = FIG_NAME.format(
             plot_dir=plot_dir, 
             ori_time=(event.preferred_origin() or event.origins[-1]).time,
             rid=event.resource_id.id.split('/')[-1])
+    elif plot_file:
+        fig_name = plot_file
+    if fig_name:
         print(f"Looking for figure: {fig_name}")
     if fig_name and os.path.isfile(fig_name):
         # Reuse old figure
@@ -104,7 +129,7 @@ def check_event(
             return "bad", fig
         fig = plot_event_from_client(
                 client=client, event=event, fig=fig, size=(8.5, 8.5),
-                length=length)
+                length=length, lowcut=lowcut, highcut=highcut)
     fig.canvas.draw()
     fig.show()
     status = None
@@ -148,7 +173,7 @@ def plot_for_all_events(
     return
 
 
-if __name__ == "__main__":
+def main():
     import json
     import glob
 
@@ -161,11 +186,13 @@ if __name__ == "__main__":
     parser.add_argument("--plot-dir", type=str, help="Directory to save plots to, or read from",
                         default=None)
     parser.add_argument("-c", "--check", action="store_true", help="Check detections")
-    parser.add_argument("--catalog", type=str, required=True, help="Catalog to read events from")
+    parser.add_argument("--catalog", type=str, required=False, help="Catalog to read events from")
     parser.add_argument("--client", type=str, help="FDSN client URL or ID to get waveforms from", default=None)
     parser.add_argument("--wavebank", type=str, help="WaveBank path to get data from", default=None)
     parser.add_argument("--length", type=float, help="Length of waveform to plot", default=120.0)
     parser.add_argument("--overwrite", action="store_true", help="Overwrite old figures")
+    parser.add_argument("--lowcut", type=float, default=None, required=False)
+    parser.add_argument("--highcut", type=float, default=None, required=False)
 
     args = parser.parse_args()
 
@@ -182,13 +209,16 @@ if __name__ == "__main__":
     elif args.wavebank:
         client = WaveBank(args.wavebank)
 
-    cat = read_events(args.catalog)
-    cat.events.sort(key=lambda ev: ev.origins[-1].time)
-    print("There are {0} events in this file".format(len(cat)))
 
     if args.plot:
+        cat = read_events(args.catalog)
+        cat.events.sort(key=lambda ev: ev.origins[-1].time)
+        print("There are {0} events in this file".format(len(cat)))
         fig = None
-        plot_for_all_events(catalog=cat, client=client, plot_dir=args.plot_dir, length=args.length, overwrite=args.overwrite)
+        plot_for_all_events(
+                catalog=cat, client=client, plot_dir=args.plot_dir, 
+                length=args.length, overwrite=args.overwrite,
+                lowcut=args.lowcut, highcut=args.highcut)
 
     if args.check:
         print("Running manual check")
@@ -198,9 +228,22 @@ if __name__ == "__main__":
         else:
             check_dict = None
         fig = None
+        if args.catalog:
+            cat = read_events(args.catalog)             
+            cat.events.sort(key=lambda ev: ev.origins[-1].time)
+            print("There are {0} events in this file".format(len(cat)))
+        else:
+            assert os.path.isdir(args.plot_dir), f"{args.plot_dir} does not exist"
+            cat = None
         check_dict, fig = manual_check(
             catalog=cat, client=client,
             checked_dict=check_dict, save_progress=True, fig=fig,
-            plot_dir=args.plot_dir, length=args.length)
+            plot_dir=args.plot_dir, length=args.length,
+            highcut=args.highcut, lowcut=args.lowcut)
         with open("manual_check_complete.json", "w") as f:
             json.dump(check_dict, f)
+
+
+if __name__ == "__main__":
+    main()
+
