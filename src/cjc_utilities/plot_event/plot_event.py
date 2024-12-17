@@ -28,6 +28,7 @@ def plot_event_from_client(event, client, length=60, size=(10.5, 10.5),
         ignore_rotated=ignore_rotated)
     if filt:
         st.detrend().filter('bandpass', freqmin=filt[0], freqmax=filt[1])
+    st = st.merge(method=1)
     if return_stream:
         return plot_event(event, st, length=length, size=size, fig=fig), st
     return plot_event(event, st, length=length, size=size, fig=fig)
