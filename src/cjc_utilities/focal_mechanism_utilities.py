@@ -18,6 +18,7 @@ def get_geonet_mt(eventid:str = None) -> pd.DataFrame:
     """ Get one (or all) GeoNet moment tensors. """
     url = "https://raw.githubusercontent.com/GeoNet/data/refs/heads/main/moment-tensor/GeoNet_CMT_solutions.csv"
     df = pd.read_csv(url)
+    df.Date = pd.to_datetime(df.Date, format="%Y%m%d%H%M%S")
     if eventid:
         df = df[df.PublicID == eventid]
     return df
@@ -27,7 +28,8 @@ def get_geonet_mt(eventid:str = None) -> pd.DataFrame:
 def jr_to_gmt(df: pd.DataFrame) -> pd.DataFrame:
     """ Convert John Ristau's csv format to GMT friendly df """
     gmt_df = pd.DataFrame(
-       data=dict(
+        data=dict(
+            origintime=df.Date,
             t_value=df.Tva,
             t_azimuth=df.Taz,
             t_plunge=df.Tpl,
