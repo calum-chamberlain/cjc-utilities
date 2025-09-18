@@ -514,8 +514,6 @@ class AnimatedCatalog(Catalog):
             horizontalalignment="left", verticalalignment="bottom",
             transform=map_ax.transAxes)
 
-        if HAS_PROGRESS:
-            bar = ProgressBar(max_value=frames)
         """ ####################### Animation function #####################"""
         def update(frame):
             if len(sub_catalogs) > 0:
@@ -535,18 +533,13 @@ class AnimatedCatalog(Catalog):
                 scatters[i].set_sizes(size_plot)
             frame_time = catalog_start + (frame * time_step)
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
-            if HAS_PROGRESS:
-                bar.update(frame)
-            else:
-                print(f"\r{frame}")
+            print(f"\r{frame}")
             artists = [timestamp, *scatters]
             return artists
 
         anim = FuncAnimation(
             fig, update, frames=frames, interval=interval, repeat=False,
             blit=True)
-        if HAS_PROGRESS:
-            bar.finish()
 
         if show:
             plt.show()
