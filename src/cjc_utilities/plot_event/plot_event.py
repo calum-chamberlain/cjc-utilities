@@ -151,17 +151,20 @@ def _plot_channel(ax, tr, picks=[], arrivals=[], lines=[], labels=[], waveform_c
         else:
             pcolor = 'k'
             label = 'Unknown arrival'
-        arrival_time = (
-            arrival.pick_id.get_referred_object().time + arrival.time_residual)
-        line = ax.axvline(x=arrival_time.datetime, color=pcolor, linewidth=2,
-                          linestyle='-', label=label)
-        if label not in labels:
-            lines.append(line)
-            labels.append(label)
-        if arrival_time.datetime > max_x:
-            max_x = arrival_time.datetime
-        elif arrival_time.datetime < min_x:
-            min_x = arrival_time.datetime
+        if arrival.time_residual:
+            arrival_time = (
+                arrival.pick_id.get_referred_object().time + 
+                arrival.time_residual)
+            line = ax.axvline(
+                x=arrival_time.datetime, color=pcolor, linewidth=2,
+                linestyle='-', label=label)
+            if label not in labels:
+                lines.append(line)
+                labels.append(label)
+            if arrival_time.datetime > max_x:
+                max_x = arrival_time.datetime
+            elif arrival_time.datetime < min_x:
+                min_x = arrival_time.datetime
     ax.set_ylabel(tr.id, rotation=0, horizontalalignment="right")
     ax.yaxis.tick_right()
     return lines, labels, min_x, max_x
