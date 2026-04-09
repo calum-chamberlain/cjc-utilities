@@ -152,6 +152,8 @@ def plot_for_all_events(
     plot_dir: str,
     length: float = 120.0,
     overwrite: bool = False,
+    lowcut: float = None,
+    highcut: float = None,
 ):
     from cjc_utilities.plot_event.plot_event import plot_event_from_client
 
@@ -167,7 +169,7 @@ def plot_for_all_events(
         print("Working on event {0} of {1}".format(i, len(catalog)))
         fig = plot_event_from_client(
                 client=client, event=event, fig=fig, size=(8.5, 8.5),
-                length=length)
+                length=length, filt=(lowcut, highcut))
         fig.savefig(fig_name, dpi=DPI)
 
     return
