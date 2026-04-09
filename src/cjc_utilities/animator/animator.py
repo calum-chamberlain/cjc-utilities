@@ -9,7 +9,6 @@ Animator for obspy catalogs
 from obspy.imaging.cm import obspy_sequential
 from obspy import Catalog, UTCDateTime
 import numpy as np
-from future.utils import native_str
 import datetime
 import warnings
 
@@ -200,7 +199,7 @@ def _blank_map(lons, lats, color, projection="global",
         show_colorbar = colorbar
     else:
         if len(lons) > 1 and hasattr(color, "__len__") and \
-                not isinstance(color, (str, native_str)):
+                not isinstance(color, str):
             show_colorbar = True
         else:
             show_colorbar = False
@@ -375,7 +374,7 @@ def _blank_map(lons, lats, color, projection="global",
     # Only show the colorbar for more than one event.
     if show_colorbar:
         if colorbar_ticklabel_format is not None:
-            if isinstance(colorbar_ticklabel_format, (str, native_str)):
+            if isinstance(colorbar_ticklabel_format, str):
                 formatter = FormatStrFormatter(colorbar_ticklabel_format)
             elif hasattr(colorbar_ticklabel_format, '__call__'):
                 formatter = FuncFormatter(colorbar_ticklabel_format)
@@ -515,8 +514,6 @@ class AnimatedCatalog(Catalog):
             horizontalalignment="left", verticalalignment="bottom",
             transform=map_ax.transAxes)
 
-        if HAS_PROGRESS:
-            bar = ProgressBar(max_value=frames)
         """ ####################### Animation function #####################"""
         def update(frame):
             if len(sub_catalogs) > 0:
@@ -536,18 +533,13 @@ class AnimatedCatalog(Catalog):
                 scatters[i].set_sizes(size_plot)
             frame_time = catalog_start + (frame * time_step)
             timestamp.set_text(frame_time.strftime("%Y/%m/%d %H:%M:%S.%d"))
-            if HAS_PROGRESS:
-                bar.update(frame)
-            else:
-                print(f"\r{frame}")
+            print(f"\r{frame}")
             artists = [timestamp, *scatters]
             return artists
 
         anim = FuncAnimation(
             fig, update, frames=frames, interval=interval, repeat=False,
             blit=True)
-        if HAS_PROGRESS:
-            bar.finish()
 
         if show:
             plt.show()

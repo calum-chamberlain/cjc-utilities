@@ -5,16 +5,25 @@ files in hour-long, single-channel files in year/julian day directories.
 Author: Calum Chamberlain 2016
 """
 
+from obspy.clients.fdsn import Client
+from obspy.core.event import Event
+from obspy import Stream, Inventory
+
+from typing import List, Union, Tuple
+
+
+
 def get_event_data(
-    client,
-    eventid=None,
-    event=None,
-    length=60,
-    all_channels=False,
-    ignore_rotated=True,
-    default_channels=["E??", "H??", "S??"],
-    start_at_origin=True,
-):
+    client: Client,
+    eventid: Union[str, None] = None,
+    event: Union[Event, None] = None,
+    length: float = 60.0,
+    all_channels: bool = False,
+    ignore_rotated: bool = True,
+    default_channels: List[str] = ["E??", "H??", "S??"],
+    start_at_origin: bool = True,
+    return_inv: bool = False,
+) -> Union[Tuple[Event, Stream], Tuple[Event, Stream, Inventory]]:
     """
     Get data for an event
 
@@ -71,6 +80,9 @@ def get_event_data(
                 print("Downloaded for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
             except FDSNNoDataException:
                 print("No data for {0}.{1}.{2}.{3}".format(*chan_info[0:4]))
+    if return_inv:
+        inv = client.get_stations_bulk(bulk, level="response")
+        return event, st, inv
     return event, st
 
 

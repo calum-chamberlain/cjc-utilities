@@ -30,6 +30,7 @@ DAY_STRUCT = "waveforms/miniseed/{date.year}/{date.year}.{date.julday:03d}"
 CHAN_STRUCT = ("{station}.{network}/{date.year}.{date.julday:03d}."
               "{station}.{location}-{channel}.{network}.D")
 
+
 Logger = logging.getLogger(__name__)
 
 
@@ -62,6 +63,7 @@ class AWSClient:
         file_length_seconds: float = 86400,
         file_length_buffer: float = 300,
         threaded: bool = False,
+        data_dir: str = None,
     ):
         self.bucket_name = bucket_name
         self.day_structure = day_structure
@@ -69,6 +71,7 @@ class AWSClient:
         self.file_length_seconds = file_length_seconds
         self.file_length_buffer = file_length_buffer
         self.threaded = threaded
+        self.data_dir = data_dir
 
     @property
     def _s3(self):
@@ -104,7 +107,7 @@ class AWSClient:
         min_start = min(_bulk[4] for _bulk in bulk)
         max_end = max(_bulk[5] for _bulk in bulk)
 
-        temp_dir = tempfile.mkdtemp(prefix="AWSClient_")
+        temp_dir = self.data_dir or tempfile.mkdtemp(prefix="AWSClient_")
         Logger.info(f"Downloading files to {temp_dir}")
         self._download_remote_paths(remote_paths, temp_dir=temp_dir)
         st = Stream()

@@ -41,7 +41,7 @@ def manual_check(
 
     if catalog is None:
         print(f"No catalog given, just checking events in {plot_dir}")
-        plot_files = glob.glob(f"{plot_dir}/*.png")
+        plot_files = sorted(glob.glob(f"{plot_dir}/*.png"))
         total_events = len(plot_files)
         for i, plot_file in enumerate(plot_files):
             try:

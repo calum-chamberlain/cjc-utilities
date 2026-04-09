@@ -3,12 +3,49 @@ Utility functions for focal mechanism work.
 
 """
 
+import pandas as pd
+
 from math import (
     sin, cos, tan, acos, radians, degrees, pi, asin, atan2, sqrt, atan)
 import numpy as np
 
 from obspy.core.event import (
     NodalPlane, PrincipalAxes, Axis, MomentTensor, Tensor)
+
+
+
+def get_geonet_mt(eventid:str = None) -> pd.DataFrame:
+    """ Get one (or all) GeoNet moment tensors. """
+    url = "https://raw.githubusercontent.com/GeoNet/data/refs/heads/main/moment-tensor/GeoNet_CMT_solutions.csv"
+    df = pd.read_csv(url)
+    df.Date = pd.to_datetime(df.Date, format="%Y%m%d%H%M%S")
+    if eventid:
+        df = df[df.PublicID == eventid]
+    return df
+
+
+
+def jr_to_gmt(df: pd.DataFrame) -> pd.DataFrame:
+    """ Convert John Ristau's csv format to GMT friendly df """
+    gmt_df = pd.DataFrame(
+        data=dict(
+            origintime=df.Date,
+            t_value=df.Tva,
+            t_azimuth=df.Taz,
+            t_plunge=df.Tpl,
+            n_value=df.Nva,
+            n_azimuth=df.Naz,
+            n_plunge=df.Npl,
+            p_value=df.Pva,
+            p_azimuth=df.Paz,
+            p_plunge=df.Ppl,
+            latitude=df.Latitude,
+            longitude=df.Longitude,
+            depth=df.CD,
+            event_name=df.PublicID,
+            exponent=20 * np.ones_like(df.Tva)))
+    return gmt_df 
+
 
 
 def aux_plane(nodal_plane):

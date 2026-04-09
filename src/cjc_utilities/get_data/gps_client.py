@@ -102,6 +102,9 @@ class GPSData():
             fmt="x", 
             color=color,
             **internal_kwargs)
+        
+        ax.grid("on")
+        ax.set_ylabel("Offset (mm)")
 
         if show:
             plt.show()
@@ -236,7 +239,7 @@ def get_gps_data(receiver: str, component: str = None) -> GPSStation:
     return station
 
 
-if __name__ == "__main__":
+def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Get and plot GNSS time series")
@@ -269,3 +272,8 @@ if __name__ == "__main__":
     fig = station.plot(show=False, seperate_channels=args.seperate_channels)
     fig.suptitle(title)
     plt.show()
+
+
+if __name__ == "__main__":
+    main()
+

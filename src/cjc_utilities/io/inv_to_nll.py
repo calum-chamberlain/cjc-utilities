@@ -26,7 +26,7 @@ def inv_to_nll(
                 # Check values are consistent
                 if depths.get(sta.code) not in [None, depth]:
                     print(f"{depth} for {sta.code} is changed from {depths.get(sta.code)}")
-                    choice = input(f"Use old depth ({depths.get(sta.code)}) or noew depth ({depth}) (o/n)?")
+                    choice = input(f"Use old depth ({depths.get(sta.code)}) or new depth ({depth}) (o/n)?")
                     assert choice in "on", "Need to chose [o]ld or [n]ew"
                     if choice == "o":
                         depth = depths.get(sta.code)
