@@ -49,6 +49,24 @@ def map_plot(
         magnitudes = mag_fill_value * np.ones_like(latitudes)
 
     magnitudes = np.nan_to_num(magnitudes, mag_fill_value)
+    return _map_plot(
+        latitude=latitudes, longitudes=longitudes, depths=depths,
+        magnitudes=magnitudes, times=times, scalebymagnitude=scalebymagnitude,
+        colorby=colorby, cmap=cmap, transparency=transparency)
+
+
+def _map_plot(
+    latitudes: np.ndarray,
+    longitudes: np.ndarray,
+    depths: np.ndarray,
+    times: np.ndarray,
+    magnitudes: np.ndarray,
+    scalebymagnitude: bool = True,
+    colorby: str = "depth",
+    cmap: str = "lajolla",
+    transparency: float = 50.,
+) -> pygmt.Figure:
+
     if scalebymagnitude:
         size = 0.1 * (2 ** magnitudes)
     else:
@@ -81,10 +99,25 @@ def map_plot(
     lat_range = latitudes.max() - latitudes.min()
     lon_range = longitudes.max() - longitudes.min()
     region = [
-        longitudes.min() - 0.1 * lon_range,
-        longitudes.max() + 0.1 * lon_range,
-        latitudes.min() - 0.1 * lat_range,
-        latitudes.max() + 0.1 * lat_range]
+        longitudes.min() - 0.01 * lon_range,
+        longitudes.max() + 0.01 * lon_range,
+        latitudes.min() - 0.01 * lat_range,
+        latitudes.max() + 0.01 * lat_range]
+
+    if lat_range > 6.0:
+        lat_ticks = "2f1"
+    elif lat_range > 2.0:
+        lat_ticks = "1f0.5"
+    else:
+        lat_ticks = "0.5f0.1"
+
+    if lon_range > 6.0:
+        lon_ticks = "2f1"
+    elif lon_range > 2.0:
+        lon_ticks = "1f0.5"
+    else:
+        lon_ticks = "0.5f0.1"
+
 
     fig = pygmt.Figure()
     if colorby:
@@ -95,9 +128,10 @@ def map_plot(
     fig.coast(region=region,
               shorelines=True,
               land='grey',
+              resolution="full",
               water='lightblue',
               projection='M10c',
-              frame=['WSne', 'xa2f1', 'ya2f1'])
+              frame=['WSne', f'xa{lat_ticks}', f'ya{lon_ticks}'])
     plot_kwargs = dict(
         x=longitudes[order],
         y=latitudes[order],

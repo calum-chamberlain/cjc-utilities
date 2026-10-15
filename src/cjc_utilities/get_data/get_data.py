@@ -96,7 +96,7 @@ def get_data(network, starttime, endtime, outdir='.'):
     :type network: str
     :param network: Network code
     :type starttime: UTCDateTime
-    :param starttime: Time to begin donloading from, will use the date
+    :param starttime: Time to begin downloading from, will use the date
     :type endtime: UTCDateTime
     :param endtime: Time to end download, will use the date
     :type outdir: str

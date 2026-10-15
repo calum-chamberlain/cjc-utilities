@@ -10,13 +10,15 @@ import copy
 
 import matplotlib.pyplot as plt
 
+import datetime
 from datetime import datetime as dt
 
 from typing import List, Union, Iterable
 
 
-GEONET_FITS = "http://fits.geonet.org.nz/observation"
-GEONET_FITS_STATION = "http://fits.geonet.org.nz/site?"
+# GEONET_FITS = "http://fits.geonet.org.nz/observation"
+# GEONET_FITS_STATION = "http://fits.geonet.org.nz/site?"
+GEONET_TILDE = "https://tilde.geonet.org.nz/v4/{service}/gnss/{station}/displacement/nil/1d/{component}/{startdate}/{enddate}"
 DEFAULT_COLORS = {"u": "grey", "e": "lightcoral", "n": "teal"}
 
 
@@ -183,7 +185,7 @@ class GPSStation():
         else:
             ax = [ax for _ in self.components]
             if seperate_channels:
-                print("You have given an axis but asked for seperate channels. This is not supported")
+                print("You have given an axis but asked for separate channels. This is not supported")
 
         for component, _ax in zip(self.components, ax):
             component.plot(ax=_ax, show=False, **kwargs)
@@ -193,45 +195,66 @@ class GPSStation():
         return fig
 
 
-def get_gps_location(receiver: str) -> dict:
-    parameters = {"siteID": receiver}
-    response = requests.get(GEONET_FITS_STATION, params=parameters)
+def get_gps_location(
+    receiver: str, 
+    startdate: datetime.date, 
+    enddate: datetime.date
+) -> dict:
+    query = GEONET_TILDE.format(
+        service="stats",
+        station=receiver,
+        startdate=startdate.strftime("%Y-%m-%d"),
+        enddate=enddate.strftime("%Y-%m-%d"),
+        component="-")
+    
+    response = requests.get(query)
     assert response.status_code == 200, \
-        f"Bad request getting station location from {GEONET_FITS_STATION}. Response code {response.status_code}"
+        f"Bad request getting station location from {query}. Response code {response.status_code}"
     payload = response.content.decode("utf-8")
     payload = json.loads(payload)
     return {
-        "latitude": payload['features'][0]['geometry']['coordinates'][1],
-        "longitude": payload['features'][0]['geometry']['coordinates'][0],
-        "elevation": payload['features'][0]['properties']['height'],
+        "latitude": payload['latitude'],
+        "longitude": payload['longitude'],
+        "elevation": payload['elevationM'],
     }
 
 
 
-def get_gps_data(receiver: str, component: str = None) -> GPSStation:
+def get_gps_data(
+    receiver: str,
+    startdate: datetime.date,
+    enddate: datetime.date,
+    component: str = None
+) -> GPSStation:
     components = ["u", "n", "e"]
+    # Change from FITS to TILDE.
+    component_mapper = {"u": "up", "e": "east", "n": "north"}
     if component:
         assert component in components, \
             f"Component ({component}) must be in {components})"
         components = [component]
 
-    location = get_gps_location(receiver)
+    location = get_gps_location(
+        receiver, startdate=startdate, enddate=enddate)
 
     station = GPSStation(**location)
     for component in components:
-        parameters = {"typeID": component, "siteID": receiver}
-        response = requests.get(GEONET_FITS, params=parameters)
+        query = GEONET_TILDE.format(
+            service="data",
+            station=receiver,
+            startdate=startdate.strftime("%Y-%m-%d"),
+            enddate=enddate.strftime("%Y-%m-%d"),
+            component=component_mapper[component])
+        response = requests.get(query)
         assert response.status_code == 200, \
-            f"Bad request getting data from {GEONET_FITS}. Response code {response.status_code}"
-        payload = response.content.decode("utf-8").split("\n")
-        # payload is a csv with header
-        payload = [p.split(',') for p in payload]
-        # Check that this is what we expect
-        assert payload[0][0] == 'date-time', "Unkown format"
-        assert len(payload[0]) == 3, "Unknown format"
+            f"Bad request getting data from {query}. Response code {response.status_code}"
+        payload = response.content.decode("utf-8")
+        payload = json.loads(payload)
+        assert len(payload) == 1, f"Got response from {len(payload)} components. One expected"
+        assert len(payload[0]['data'][0]) == 4, "Unknown format"
         times, displacements, errors = zip(*[
-            (dt.strptime(p[0], '%Y-%m-%dT%H:%M:%S.%fZ'),
-            float(p[1]), float(p[2])) for p in payload[1:-1]])
+            (dt.strptime(p['ts'], '%Y-%m-%dT%H:%M:%SZ'),
+            float(p['val']), float(p['err'])) for p in payload[0]['data']])
         station += GPSData(
             receiver=receiver, component=component, times=np.array(times),
             observations=np.array(displacements), 
