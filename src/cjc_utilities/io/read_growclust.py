@@ -59,13 +59,15 @@ def growclust_line_to_origin(line: str) -> [str, Origin]:
         time_errors={"uncertainty": deserialized["et"]},
         depth_errors={"uncertainty": deserialized["ez"] * 1000.0},
         time_fixed=False,
-        origin_uncertainty=OriginUncertainty(
-            horizontal_uncertainty=deserialized["eh"] * 1000.0),
         quality=OriginQuality(
             used_phase_count=deserialized["qndiffP"] + deserialized["qndiffS"],
             standard_error=(
                 deserialized["qndiffP"] + deserialized["qndiffS"]) * 
                 (p_standard_error + s_standard_error)))
+    # nan uncertainty is not allowed for horizontal uncertainty
+    if deserialized["eh"] != float(nan):
+        origin.origin_uncertainty = OriginUncertainty(
+            horizontal_uncertainty=deserialized["eh"] * 1000.0)
     return deserialized["eventid"], origin
 
 
