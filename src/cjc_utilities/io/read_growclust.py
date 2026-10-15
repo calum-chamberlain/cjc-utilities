@@ -65,7 +65,7 @@ def growclust_line_to_origin(line: str) -> [str, Origin]:
                 deserialized["qndiffP"] + deserialized["qndiffS"]) * 
                 (p_standard_error + s_standard_error)))
     # nan uncertainty is not allowed for horizontal uncertainty
-    if deserialized["eh"] != float(nan):
+    if deserialized["eh"] != float('nan'):
         origin.origin_uncertainty = OriginUncertainty(
             horizontal_uncertainty=deserialized["eh"] * 1000.0)
     return deserialized["eventid"], origin
