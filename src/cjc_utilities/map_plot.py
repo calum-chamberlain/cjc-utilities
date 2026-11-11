@@ -5,8 +5,10 @@ Simple map plotting for earthquake catalogues
 
 import pygmt
 import numpy as np
+import datetime as dt
 
 from obspy.core.event import Catalog, Event
+from obspy import UTCDateTime
 
 
 def _get_origin_attr(eq: Event, attr: str):
@@ -31,7 +33,9 @@ def map_plot(
     scalebymagnitude: bool = True,
     colorby: str = "depth",
     cmap: str = "lajolla",
+    reverse_cmap: bool = False,
     transparency: float = 50.,
+    pad: float = 0.01,
 ) -> pygmt.Figure:
 
     latitudes = np.array(
@@ -52,7 +56,8 @@ def map_plot(
     return _map_plot(
         latitude=latitudes, longitudes=longitudes, depths=depths,
         magnitudes=magnitudes, times=times, scalebymagnitude=scalebymagnitude,
-        colorby=colorby, cmap=cmap, transparency=transparency)
+        colorby=colorby, cmap=cmap, transparency=transparency,
+        reverse_cmap=reverse_cmap, pad=pad)
 
 
 def _map_plot(
@@ -64,7 +69,10 @@ def _map_plot(
     scalebymagnitude: bool = True,
     colorby: str = "depth",
     cmap: str = "lajolla",
+    reverse_cmap: bool = False,
     transparency: float = 50.,
+    pad: float = 0.01,
+    region = None,
 ) -> pygmt.Figure:
 
     if scalebymagnitude:
@@ -81,7 +89,10 @@ def _map_plot(
     elif colorby.lower() == "time":
         zerotime = min(times)
         pen = None
-        colors = np.array([t - zerotime for t in times])
+        if isinstance(zerotime, UTCDateTime):
+            colors = np.array([t - zerotime for t in times])
+        elif isinstance(zerotime, dt.datetime):
+            colors = np.array([(t - zerotime).total_seconds() for t in times])
         if max(colors) - min(colors) < 3600:
             colors /= 60
             time_unit = "Minutes"
@@ -98,11 +109,12 @@ def _map_plot(
 
     lat_range = latitudes.max() - latitudes.min()
     lon_range = longitudes.max() - longitudes.min()
-    region = [
-        longitudes.min() - 0.01 * lon_range,
-        longitudes.max() + 0.01 * lon_range,
-        latitudes.min() - 0.01 * lat_range,
-        latitudes.max() + 0.01 * lat_range]
+    if region is None:
+        region = [
+            longitudes.min() - pad * lon_range,
+            longitudes.max() + pad * lon_range,
+            latitudes.min() - pad * lat_range,
+            latitudes.max() + pad * lat_range]
 
     if lat_range > 6.0:
         lat_ticks = "2f1"
@@ -122,7 +134,7 @@ def _map_plot(
     fig = pygmt.Figure()
     if colorby:
         pygmt.makecpt(cmap=cmap, series=[
-            colors.min(), colors.max()])
+            colors.min(), colors.max()], reverse=reverse_cmap)
 
     pygmt.config(MAP_FRAME_TYPE='plain', FORMAT_GEO_MAP='ddd.xx')
     fig.coast(region=region,
