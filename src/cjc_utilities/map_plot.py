@@ -54,7 +54,7 @@ def map_plot(
 
     magnitudes = np.nan_to_num(magnitudes, mag_fill_value)
     return _map_plot(
-        latitude=latitudes, longitudes=longitudes, depths=depths,
+        latitudes=latitudes, longitudes=longitudes, depths=depths,
         magnitudes=magnitudes, times=times, scalebymagnitude=scalebymagnitude,
         colorby=colorby, cmap=cmap, transparency=transparency,
         reverse_cmap=reverse_cmap, pad=pad)
